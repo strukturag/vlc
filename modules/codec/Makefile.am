@@ -249,6 +249,7 @@ libavcodec_plugin_la_SOURCES = \
 	codec/avcodec/fourcc.c \
 	codec/avcodec/chroma.c codec/avcodec/chroma.h \
 	codec/avcodec/va.c codec/avcodec/va.h \
+	../libde265-ffmpeg/libde265dec.c ../libde265-ffmpeg/libde265dec.h \
 	codec/avcodec/avcodec.c codec/avcodec/avcodec.h
 if ENABLE_SOUT
 libavcodec_plugin_la_SOURCES += codec/avcodec/encoder.c
@@ -269,6 +270,8 @@ endif
 if HAVE_AVCODEC
 codec_LTLIBRARIES += libavcodec_plugin.la
 endif
+libavcodec_plugin_la_CFLAGS += "-I/usr/local/include -mmacosx-version-min=10.8"
+libavcodec_plugin_la_LDFLAGS += "-L/usr/local/lib -lde265"
 
 ### avcodec hardware acceleration ###
 

@@ -36,6 +36,8 @@
 
 #include "avcommon_compat.h"
 
+#include "../../../libde265-ffmpeg/libde265dec.h"
+
 #ifdef HAVE_LIBAVUTIL_AVUTIL_H
 # include <libavutil/avutil.h>
 # include <libavutil/dict.h>
@@ -97,6 +99,8 @@ static inline void vlc_init_avformat(vlc_object_t *obj)
 
     av_register_all();
 
+    libde265dec_register();
+
     vlc_avcodec_unlock();
 }
 #endif
@@ -113,6 +117,8 @@ static inline void vlc_init_avcodec(vlc_object_t *obj)
     avcodec_init();
 #endif
     avcodec_register_all();
+
+    libde265dec_register();
 
     vlc_avcodec_unlock();
 }
