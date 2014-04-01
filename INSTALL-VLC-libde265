@@ -1,0 +1,19 @@
+INSTALL file for the VLC media player with libde265
+===================================================
+
+More extensive information for *nix, Windows and Mac OS X users can be
+found here: http://wiki.videolan.org/Compile_VLC
+
+Build and install libde265
+==========================
+
+1 git clone https://github.com/strukturag/libde265.git
+2 ./autogen.sh
+3 ./configure --enable-static --enable-shared=no
+4 make && sudo make install
+
+Build VLC with libde265 (Mac OS X)
+==================================
+
+1 mkdir build && cd build
+2 ../extras/package/macosx/build.sh
