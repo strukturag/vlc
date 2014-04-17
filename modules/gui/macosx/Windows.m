@@ -710,9 +710,6 @@
 
 - (void)windowWillEnterFullScreen:(NSNotification *)notification
 {
-    // workaround, see #6668
-    [NSApp setPresentationOptions:(NSApplicationPresentationFullScreen | NSApplicationPresentationAutoHideDock | NSApplicationPresentationAutoHideMenuBar)];
-
     i_originalLevel = [self level];
     b_windowShouldExitFullscreenWhenFinished = [[VLCMain sharedInstance] activeVideoPlayback];
 
@@ -778,7 +775,6 @@
         if ([[subviews objectAtIndex:x] respondsToSelector:@selector(reshape)])
             [[subviews objectAtIndex:x] reshape];
     }
-
 }
 
 - (void)windowWillExitFullScreen:(NSNotification *)notification
@@ -786,9 +782,9 @@
     b_in_fullscreen_transition = YES;
     [self setFullscreen: NO];
 
-    var_SetBool(pl_Get(VLCIntf), "fullscreen", false);
-
     if ([self hasActiveVideo]) {
+        var_SetBool(pl_Get(VLCIntf), "fullscreen", false);
+
         vout_thread_t *p_vout = getVoutForActiveWindow();
         if (p_vout) {
             var_SetBool(p_vout, "fullscreen", false);

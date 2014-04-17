@@ -607,7 +607,7 @@ QFrame *AbstractController::telexFrame()
 
     /* Page setting */
     QSpinBox *telexPage = new QSpinBox( telexFrame );
-    telexPage->setRange( 0, 999 );
+    telexPage->setRange( 100, 899 );
     telexPage->setValue( 100 );
     telexPage->setAccelerated( true );
     telexPage->setWrapping( true );
@@ -615,6 +615,40 @@ QFrame *AbstractController::telexFrame()
     telexPage->setSizePolicy( QSizePolicy::Preferred, QSizePolicy::Minimum );
     telexPage->setEnabled( false );
     telexLayout->addWidget( telexPage );
+
+    /* Contextual & Index Buttons */
+    QSignalMapper *contextButtonMapper = new QSignalMapper( this );
+    QToolButton *contextButton = NULL;
+    int i_iconminsize = __MAX( 16, telexOn->minimumHeight() );
+    QPixmap iconPixmap( i_iconminsize, i_iconminsize );
+    iconPixmap.fill( Qt::transparent );
+    QPainter iconPixmapPainter( &iconPixmap );
+    QLinearGradient iconPixmapPainterGradient( iconPixmap.rect().center() / 2,
+                                               iconPixmap.rect().center() );
+
+#define CREATE_CONTEXT_BUTTON(color, key) \
+    iconPixmapPainterGradient.setColorAt( 0, QColor( color ).lighter(150) );\
+    iconPixmapPainterGradient.setColorAt( 1.0, QColor( color ) );\
+    iconPixmapPainter.setBrush( iconPixmapPainterGradient );\
+    iconPixmapPainter.drawEllipse( iconPixmap.rect().adjusted( 4, 4, -5, -5 ) );\
+    contextButton = new QToolButton();\
+    setupButton( contextButton );\
+    contextButton->setIcon( iconPixmap );\
+    contextButton->setEnabled( false );\
+    contextButtonMapper->setMapping( contextButton, key << 16 );\
+    CONNECT( contextButton, clicked(), contextButtonMapper, map() );\
+    CONNECT( contextButtonMapper, mapped( int ),\
+             THEMIM->getIM(), telexSetPage( int ) );\
+    CONNECT( THEMIM->getIM(), teletextActivated( bool ), contextButton, setEnabled( bool ) );\
+    telexLayout->addWidget( contextButton )
+
+    CREATE_CONTEXT_BUTTON("grey", 'i'); /* index */
+    CREATE_CONTEXT_BUTTON("red", 'r');
+    CREATE_CONTEXT_BUTTON("green", 'g');
+    CREATE_CONTEXT_BUTTON("yellow", 'y');
+    CREATE_CONTEXT_BUTTON("blue", 'b');
+
+#undef CREATE_CONTEXT_BUTTON
 
     /* Page change and set */
     CONNECT( telexPage, valueChanged( int ),

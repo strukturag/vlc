@@ -1,7 +1,7 @@
 /*****************************************************************************
  * audiobargraph_a.c : audiobargraph audio plugin for vlc
  *****************************************************************************
- * Copyright (C) 2002-2009 VLC authors and VideoLAN
+ * Copyright (C) 2002-2014 VLC authors and VideoLAN
  * $Id$
  *
  * Authors: Clement CHESNIN <clement.chesnin@gmail.com>
@@ -75,9 +75,9 @@ vlc_module_begin ()
 
     add_obsolete_string( CFG_PREFIX "address" )
     add_obsolete_integer( CFG_PREFIX "port" )
-    add_integer( CFG_PREFIX "bargraph", 1, BARGRAPH_TEXT, BARGRAPH_LONGTEXT, false )
+    add_integer( CFG_PREFIX "bargraph", 1, BARGRAPH_TEXT, BARGRAPH_LONGTEXT, false ) // FIXME: this is a bool
     add_integer( CFG_PREFIX "bargraph_repetition", 4, BARGRAPH_REPETITION_TEXT, BARGRAPH_REPETITION_LONGTEXT, false )
-    add_integer( CFG_PREFIX "silence", 1, SILENCE_TEXT, SILENCE_LONGTEXT, false )
+    add_integer( CFG_PREFIX "silence", 1, SILENCE_TEXT, SILENCE_LONGTEXT, false ) // FIXME: this is a bool
     add_integer( CFG_PREFIX "time_window", 5000, TIME_WINDOW_TEXT, TIME_WINDOW_LONGTEXT, false )
     add_float( CFG_PREFIX "alarm_threshold", 0.1, ALARM_THRESHOLD_TEXT, ALARM_THRESHOLD_LONGTEXT, false )
     add_integer( CFG_PREFIX "repetition_time", 2000, REPETITION_TIME_TEXT, REPETITION_TIME_LONGTEXT, false )
@@ -94,14 +94,13 @@ typedef struct ValueDate_t {
 
 struct filter_sys_t
 {
-    int             bargraph;
+    bool            bargraph;
     int             bargraph_repetition;
-    int             silence;
-    int             time_window;
+    bool            silence;
+    int64_t         time_window;
     float           alarm_threshold;
-    int             repetition_time;
+    int64_t         repetition_time;
     int             counter;
-    int             nbChannels;
     ValueDate_t*    first;
     ValueDate_t*    last;
     int             started;
@@ -114,18 +113,17 @@ struct filter_sys_t
 static int Open( vlc_object_t *p_this )
 {
     filter_t     *p_filter = (filter_t *)p_this;
-    filter_sys_t *p_sys = p_filter->p_sys = malloc( sizeof( *p_sys ) );
-    if( !p_sys )
+    filter_sys_t *p_sys = p_filter->p_sys = malloc(sizeof(*p_sys));
+    if (!p_sys)
         return VLC_ENOMEM;
 
-    p_sys->bargraph = var_CreateGetIntegerCommand( p_filter, "audiobargraph_a-bargraph" );
-    p_sys->bargraph_repetition = var_CreateGetIntegerCommand( p_filter, "audiobargraph_a-bargraph_repetition" );
-    p_sys->silence = var_CreateGetIntegerCommand( p_filter, "audiobargraph_a-silence" );
-    p_sys->time_window = var_CreateGetIntegerCommand( p_filter, "audiobargraph_a-time_window" );
-    p_sys->alarm_threshold = var_CreateGetFloatCommand( p_filter, "audiobargraph_a-alarm_threshold" );
-    p_sys->repetition_time = var_CreateGetIntegerCommand( p_filter, "audiobargraph_a-repetition_time" );
+    p_sys->bargraph = !!var_CreateGetInteger(p_filter, CFG_PREFIX "bargraph");
+    p_sys->bargraph_repetition = var_CreateGetInteger(p_filter, CFG_PREFIX "bargraph_repetition");
+    p_sys->silence = !!var_CreateGetInteger(p_filter, CFG_PREFIX "silence");
+    p_sys->time_window = var_CreateGetInteger(p_filter, CFG_PREFIX "time_window") * 1000;
+    p_sys->alarm_threshold = var_CreateGetFloat(p_filter, CFG_PREFIX "alarm_threshold");
+    p_sys->repetition_time = var_CreateGetInteger(p_filter, CFG_PREFIX "repetition_time") * 1000;
     p_sys->counter = 0;
-    p_sys->nbChannels = 0;
     p_sys->first = NULL;
     p_sys->last = NULL;
     p_sys->started = 0;
@@ -135,10 +133,28 @@ static int Open( vlc_object_t *p_this )
     p_filter->fmt_out.audio = p_filter->fmt_in.audio;
     p_filter->pf_audio_filter = DoWork;
 
-    var_Create( p_filter->p_libvlc, "audiobargraph_v-alarm", VLC_VAR_BOOL );
-    var_Create( p_filter->p_libvlc, "audiobargraph_v-i_values", VLC_VAR_STRING );
+    var_Create(p_filter->p_libvlc, "audiobargraph_v-alarm", VLC_VAR_BOOL);
+    var_Create(p_filter->p_libvlc, "audiobargraph_v-i_values", VLC_VAR_STRING);
 
     return VLC_SUCCESS;
+}
+
+static void SendValues(filter_t *p_filter, float *value, int nbChannels)
+{
+    char message[256];
+    size_t len = 0;
+
+    for (int i = 0; i < nbChannels; i++) {
+        if (len >= sizeof(message))
+            break;
+        len += snprintf(message + len, sizeof (message),"%f:", value[i]);
+    }
+
+    message[len-1] = '\0';
+    //msg_Dbg(p_filter, "values: %s", message);
+
+    var_SetString(p_filter->p_libvlc, "audiobargraph_v-i_values",
+            message);
 }
 
 /*****************************************************************************
@@ -147,35 +163,26 @@ static int Open( vlc_object_t *p_this )
 static block_t *DoWork( filter_t *p_filter, block_t *p_in_buf )
 {
     filter_sys_t *p_sys = p_filter->p_sys;
-    int i;
     float *p_sample = (float *)p_in_buf->p_buffer;
     float i_value[AOUT_CHAN_MAX];
-    float ch;
-    float max = 0.0;
-    int nbChannels = 0;
-    ValueDate_t* current = NULL;
-    float sum;
-    int count = 0;
 
-    nbChannels = aout_FormatNbChannels( &p_filter->fmt_in.audio );
-    p_sys->nbChannels = nbChannels;
+    int nbChannels = aout_FormatNbChannels(&p_filter->fmt_in.audio);
 
-    for (i=0; i<nbChannels; i++) {
+    for (int i = 0; i < nbChannels; i++)
         i_value[i] = 0.;
-    }
 
-    /* 1 - Compute the peack values */
-    for ( i = 0 ; i < (int)(p_in_buf->i_nb_samples); i++ )
-    {
+    /* 1 - Compute the peak values */
+    float max = 0.0;
+    for (size_t i = 0; i < p_in_buf->i_nb_samples; i++) {
         for (int j = 0; j<nbChannels; j++) {
-            ch = (*p_sample++);
+            float ch = (*p_sample++);
             if (ch > i_value[j])
                 i_value[j] = ch;
             if (ch > max)
                 max = ch;
         }
     }
-    max = powf( max, 2 );
+    max *= max;
 
     if (p_sys->silence) {
         /* 2 - store the new value */
@@ -183,31 +190,30 @@ static block_t *DoWork( filter_t *p_filter, block_t *p_in_buf )
         new->value = max;
         new->date = p_in_buf->i_pts;
         new->next = NULL;
-        if (p_sys->last != NULL) {
+        if (p_sys->last != NULL)
             p_sys->last->next = new;
-        }
         p_sys->last = new;
-        if (p_sys->first == NULL) {
+        if (p_sys->first == NULL)
             p_sys->first = new;
-        }
 
         /* 3 - delete too old values */
-        while (p_sys->first->date < (new->date - (p_sys->time_window*1000))) {
+        while (p_sys->first->date < new->date - p_sys->time_window) {
             p_sys->started = 1; // we have enough values to compute a valid total
-            current = p_sys->first;
+            ValueDate_t *current = p_sys->first;
             p_sys->first = p_sys->first->next;
             free(current);
         }
 
         /* If last message was sent enough time ago */
-        if ((p_sys->started) && (p_in_buf->i_pts > p_sys->lastAlarm + (p_sys->repetition_time*1000))) {
+        if (p_sys->started && p_in_buf->i_pts > p_sys->lastAlarm + p_sys->repetition_time) {
 
             /* 4 - compute the RMS */
-            current = p_sys->first;
-            sum = 0.0;
+            ValueDate_t *current = p_sys->first;
+            float sum = 0.0;
+            int count = 0;
             while (current != NULL) {
                 sum += current->value;
-                count ++;
+                count++;
                 current = current->next;
             }
             sum /= count;
@@ -221,38 +227,10 @@ static block_t *DoWork( filter_t *p_filter, block_t *p_in_buf )
         }
     }
 
-    /*for (i=0; i<nbChannels; i++) {
-        value[i] = abs(i_value[i]*100);
-        if ( value[i] > p_sys->value[i] - 6 )
-            p_sys->value[i] = value[i];
-        else
-            p_sys->value[i] = p_sys->value[i] - 6;
-    }*/
-
-    if (p_sys->bargraph) {
-        /* 6 - sent the message with the values for the BarGraph */
-        if ((nbChannels > 0) && (p_sys->counter%(p_sys->bargraph_repetition) == 0)) {
-            char message[256];
-            size_t j = 0;
-
-            for (i = 0; i < nbChannels; i++) {
-                if (j >= sizeof (message))
-                    break;
-                j += snprintf(message + j, sizeof (message),"%f:", i_value[i]);
-            }
-
-            message[--j] = '\0';
-            msg_Dbg( p_filter, "values: %s", message );
-
-            var_SetString(p_filter->p_libvlc, "audiobargraph_v-i_values",
-                          message);
-        }
-    }
-
-    if (p_sys->counter > p_sys->bargraph_repetition*100)
+    if (p_sys->bargraph && nbChannels > 0 && p_sys->counter++ > p_sys->bargraph_repetition) {
+        SendValues(p_filter, i_value, nbChannels);
         p_sys->counter = 0;
-
-    p_sys->counter++;
+    }
 
     return p_in_buf;
 }
@@ -264,17 +242,14 @@ static void Close( vlc_object_t *p_this )
 {
     filter_t * p_filter = (filter_t *)p_this;
     filter_sys_t *p_sys = p_filter->p_sys;
-    ValueDate_t* current;
 
-    var_Destroy( p_filter->p_libvlc, "audiobargraph_v-i_values" );
-    var_Destroy( p_filter->p_libvlc, "audiobargraph_v-alarm" );
+    var_Destroy(p_filter->p_libvlc, "audiobargraph_v-i_values");
+    var_Destroy(p_filter->p_libvlc, "audiobargraph_v-alarm");
 
-    p_sys->last = NULL;
     while (p_sys->first != NULL) {
-        current = p_sys->first;
+        ValueDate_t *current = p_sys->first;
         p_sys->first = p_sys->first->next;
         free(current);
     }
-    //free(p_sys->value);
-    free( p_filter->p_sys );
+    free(p_sys);
 }

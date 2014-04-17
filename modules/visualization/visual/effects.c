@@ -119,6 +119,11 @@ static int spectrum_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
     int16_t  *p_buffs;                    /* int16_t converted buffer */
     int16_t  *p_s16_buff;                 /* int16_t converted buffer */
 
+    if (!p_buffer->i_nb_samples) {
+        msg_Err(p_aout, "no samples yet");
+        return -1;
+    }
+
     /* Create p_data if needed */
     if( !p_data )
     {
@@ -450,6 +455,11 @@ static int spectrometer_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
 
     int16_t  *p_buffs;                    /* int16_t converted buffer */
     int16_t  *p_s16_buff;                /* int16_t converted buffer */
+
+    if (!p_buffer->i_nb_samples) {
+        msg_Err(p_aout, "no samples yet");
+        return -1;
+    }
 
     /* Create the data struct if needed */
     spectrometer_data *p_data = p_effect->p_data;
@@ -935,7 +945,7 @@ static int vuMeter_Run(visual_effect_t * p_effect, vlc_object_t *p_aout,
     float i_value_l = 0;
     float i_value_r = 0;
 
-    /* Compute the peack values */
+    /* Compute the peak values */
     for ( unsigned i = 0 ; i < p_buffer->i_nb_samples; i++ )
     {
         const float *p_sample = (float *)p_buffer->p_buffer;

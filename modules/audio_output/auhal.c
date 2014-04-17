@@ -117,6 +117,8 @@ struct aout_sys_t
     vlc_cond_t                  cond;
 
     bool                        b_ignore_streams_changed_callback;
+
+    UInt32                      i_device_latency;    /* The time the device needs to process the data. In samples. */
 };
 
 #pragma mark -
@@ -314,6 +316,7 @@ static int Start(audio_output_t *p_aout, audio_sample_format_t *restrict fmt)
     p_sys->b_changed_mixing = false;
     p_sys->i_bytes_per_sample = 0;
     p_sys->b_paused = false;
+    p_sys->i_device_latency = 0;
 
     vlc_mutex_lock(&p_sys->var_lock);
     p_sys->i_selected_dev = p_sys->i_new_selected_dev;
@@ -324,18 +327,29 @@ static int Start(audio_output_t *p_aout, audio_sample_format_t *restrict fmt)
 
     AudioObjectPropertyAddress audioDeviceAliveAddress = { kAudioDevicePropertyDeviceIsAlive, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMaster };
     if (p_sys->i_selected_dev > 0) {
-        /* Check if the desired device is alive and usable */
-        i_param_size = sizeof(b_alive);
-        err = AudioObjectGetPropertyData(p_sys->i_selected_dev, &audioDeviceAliveAddress, 0, NULL, &i_param_size, &b_alive);
-        if (err != noErr) {
-            /* Be tolerant, only give a warning here */
-            msg_Warn(p_aout, "could not check whether device [0x%x] is alive [%4.4s]",
-                     (unsigned int)p_sys->i_selected_dev, (char *)&err);
-            b_alive = false;
-        }
 
-        if (!b_alive)
-            msg_Warn(p_aout, "selected audio device is not alive, switching to default device");
+        /* Check if device is in devices list. Only checking for kAudioDevicePropertyDeviceIsAlive is not sufficient,
+         * as a former airplay device might be already gone, but the device number might be still valid. Core Audio
+         * even says that this device would be alive. Don't ask why, its Core Audio. */
+        CFIndex count = CFArrayGetCount(p_sys->device_list);
+        if (CFArrayContainsValue(p_sys->device_list, CFRangeMake(0, count), CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &p_sys->i_selected_dev))) {
+
+            /* Check if the desired device is alive and usable */
+            i_param_size = sizeof(b_alive);
+            err = AudioObjectGetPropertyData(p_sys->i_selected_dev, &audioDeviceAliveAddress, 0, NULL, &i_param_size, &b_alive);
+            if (err != noErr) {
+                /* Be tolerant, only give a warning here */
+                msg_Warn(p_aout, "could not check whether device [0x%x] is alive [%4.4s]",
+                         (unsigned int)p_sys->i_selected_dev, (char *)&err);
+                b_alive = false;
+            }
+
+            if (!b_alive)
+                msg_Warn(p_aout, "selected audio device is not alive, switching to default device");
+
+        } else {
+            msg_Warn(p_aout, "device id %i not found in the current devices list, fallback to default device", p_sys->i_selected_dev);
+        }
     }
 
     p_sys->b_selected_dev_is_default = false;
@@ -397,6 +411,22 @@ static int Start(audio_output_t *p_aout, audio_sample_format_t *restrict fmt)
                           "use by another program."));
         goto error;
     }
+
+    /* get device latency */
+    AudioObjectPropertyAddress latencyAddress = { kAudioDevicePropertyLatency, kAudioDevicePropertyScopeOutput, kAudioObjectPropertyElementMaster };
+    i_param_size = sizeof(p_sys->i_device_latency);
+    err = AudioObjectGetPropertyData(p_sys->i_selected_dev,
+                                     &latencyAddress,
+                                     0,
+                                     NULL,
+                                     &i_param_size,
+                                     &p_sys->i_device_latency);
+    if (err != noErr) {
+        msg_Warn(p_aout, "Cannot get device latency [%4.4s]",
+                 (char *)&err);
+    }
+    msg_Dbg(p_aout, "Current device has a latency of %u frames", p_sys->i_device_latency);
+
 
     bool b_success = false;
 
@@ -1413,7 +1443,7 @@ static int TimeGet(audio_output_t *p_aout, mtime_t *delay)
     int32_t availableBytes;
     TPCircularBufferTail(&p_sys->circular_buffer, &availableBytes);
 
-    *delay = (availableBytes / p_sys->i_bytes_per_sample) * CLOCK_FREQ / p_sys->i_rate;
+    *delay = ((availableBytes / p_sys->i_bytes_per_sample) + p_sys->i_device_latency) * CLOCK_FREQ / p_sys->i_rate;
 
     return 0;
 }

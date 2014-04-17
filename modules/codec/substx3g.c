@@ -26,6 +26,7 @@
 #include <vlc_plugin.h>
 #include <vlc_codec.h>
 #include <vlc_sout.h>
+#include <vlc_charset.h>
 
 #include "substext.h"
 
@@ -79,11 +80,41 @@ static int ConvertFlags( int i_atomflags )
     int i_vlcstyles_flags = 0;
     if ( i_atomflags & FONT_FACE_BOLD )
         i_vlcstyles_flags |= STYLE_BOLD;
-    else if ( i_atomflags & FONT_FACE_ITALIC )
+    if ( i_atomflags & FONT_FACE_ITALIC )
         i_vlcstyles_flags |= STYLE_ITALIC;
-    else if ( i_atomflags & FONT_FACE_UNDERLINE )
+    if ( i_atomflags & FONT_FACE_UNDERLINE )
         i_vlcstyles_flags |= STYLE_UNDERLINE;
     return i_vlcstyles_flags;
+}
+
+static size_t str8len( const char *psz_string )
+{
+    const char *psz_tmp = psz_string;
+    size_t i=0;
+    while ( *psz_tmp )
+    {
+        if ( (*psz_tmp & 0xC0) != 0x80 ) i++;
+        psz_tmp++;
+    }
+    return i;
+}
+
+static char * str8indup( const char *psz_string, size_t i_skip, size_t n )
+{
+    while( i_skip && *psz_string )
+    {
+        if ( (*psz_string & 0xC0) != 0x80 ) i_skip--;
+        psz_string++;
+    }
+    if ( ! *psz_string || i_skip ) return NULL;
+
+    const char *psz_tmp = psz_string;
+    while( n && *psz_tmp )
+    {
+        if ( (*psz_tmp & 0xC0) != 0x80 ) n--;
+        psz_tmp++;
+    }
+    return strndup( psz_string, psz_tmp - psz_string );
 }
 
 static void SegmentDoSplit( segment_t *p_segment, uint16_t i_start, uint16_t i_end,
@@ -104,23 +135,23 @@ static void SegmentDoSplit( segment_t *p_segment, uint16_t i_start, uint16_t i_e
         p_segment_left = calloc( 1, sizeof(segment_t) );
         if ( !p_segment_left ) goto error;
         memcpy( &p_segment_left->styles, &p_segment->styles, sizeof(segment_style_t) );
-        p_segment_left->psz_string = strndup( p_segment->psz_string, i_start );
-        p_segment_left->i_size = strlen( p_segment_left->psz_string );
+        p_segment_left->psz_string = str8indup( p_segment->psz_string, 0, i_start );
+        p_segment_left->i_size = str8len( p_segment_left->psz_string );
     }
 
     p_segment_middle = calloc( 1, sizeof(segment_t) );
     if ( !p_segment_middle ) goto error;
     memcpy( &p_segment_middle->styles, &p_segment->styles, sizeof(segment_style_t) );
-    p_segment_middle->psz_string = strndup( p_segment->psz_string + i_start, i_end - i_start + 1 );
-    p_segment_middle->i_size = strlen( p_segment_middle->psz_string );
+    p_segment_middle->psz_string = str8indup( p_segment->psz_string, i_start, i_end - i_start + 1 );
+    p_segment_middle->i_size = str8len( p_segment_middle->psz_string );
 
     if ( i_end < (p_segment->i_size - 1) )
     {
         p_segment_right = calloc( 1, sizeof(segment_t) );
         if ( !p_segment_right ) goto error;
         memcpy( &p_segment_right->styles, &p_segment->styles, sizeof(segment_style_t) );
-        p_segment_right->psz_string = strndup( p_segment->psz_string + i_end + 1, p_segment->i_size - i_end - 1 );
-        p_segment_right->i_size = strlen( p_segment_right->psz_string );
+        p_segment_right->psz_string = str8indup( p_segment->psz_string, i_end + 1, p_segment->i_size - i_end - 1 );
+        p_segment_right->i_size = str8len( p_segment_right->psz_string );
     }
 
     if ( p_segment_left ) p_segment_left->p_next = p_segment_middle;
@@ -225,14 +256,26 @@ static subpicture_t *Decode( decoder_t *p_dec, block_t **pp_block )
     uint8_t *p_buf = p_block->p_buffer;
 
     /* Read our raw string and create the styled segment for HTML */
-    uint16_t i_psz_length = GetWBE( p_buf );
-    char *psz_subtitle = malloc( i_psz_length + 1 );
-    if ( !psz_subtitle ) return NULL;
-    memcpy( psz_subtitle, p_block->p_buffer + sizeof(uint16_t), i_psz_length );
-    psz_subtitle[ i_psz_length ] = '\0';
-    p_buf += i_psz_length + sizeof(uint16_t);
+    uint16_t i_psz_bytelength = GetWBE( p_buf );
+    const uint8_t *p_pszstart = p_block->p_buffer + sizeof(uint16_t);
+    char *psz_subtitle;
+    if ( i_psz_bytelength > 2 &&
+         ( !memcmp( p_pszstart, "\xFE\xFF", 2 ) || !memcmp( p_pszstart, "\xFF\xFE", 2 ) )
+       )
+    {
+        psz_subtitle = FromCharset( "UTF-16", p_pszstart, i_psz_bytelength );
+        if ( !psz_subtitle ) return NULL;
+    }
+    else
+    {
+        psz_subtitle = malloc( i_psz_bytelength + 1 );
+        if ( !psz_subtitle ) return NULL;
+        memcpy( psz_subtitle, p_pszstart, i_psz_bytelength );
+        psz_subtitle[ i_psz_bytelength ] = '\0';
+    }
+    p_buf += i_psz_bytelength + sizeof(uint16_t);
 
-    for( uint16_t i=0; i < i_psz_length; i++ )
+    for( uint16_t i=0; i < i_psz_bytelength; i++ )
      if ( psz_subtitle[i] == '\r' ) psz_subtitle[i] = '\n';
 
     segment_t *p_segment = calloc( 1, sizeof(segment_t) );
@@ -242,7 +285,7 @@ static subpicture_t *Decode( decoder_t *p_dec, block_t **pp_block )
         return NULL;
     }
     p_segment->psz_string = strdup( psz_subtitle );
-    p_segment->i_size = strlen( psz_subtitle );
+    p_segment->i_size = str8len( psz_subtitle );
     if ( p_dec->fmt_in.subs.p_style )
     {
         p_segment->styles.i_color = p_dec->fmt_in.subs.p_style->i_font_color;
@@ -287,8 +330,8 @@ static subpicture_t *Decode( decoder_t *p_dec, block_t **pp_block )
             while( i_cur_record++ < i_nbrecords )
             {
                 if ( (size_t)(p_buf - p_block->p_buffer) < 12 ) break;
-                uint16_t i_start = __MIN( GetWBE(p_buf), i_psz_length - 1 );
-                uint16_t i_end =  __MIN( GetWBE(p_buf + 2), i_psz_length - 1 );
+                uint16_t i_start = __MIN( GetWBE(p_buf), i_psz_bytelength - 1 );
+                uint16_t i_end =  __MIN( GetWBE(p_buf + 2), i_psz_bytelength - 1 );
 
                 segment_style_t style;
                 style.i_flags = ConvertFlags( p_buf[6] );

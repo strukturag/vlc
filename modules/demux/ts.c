@@ -237,6 +237,12 @@ typedef enum
     TS_ES_DATA_TABLE_SECTION
 } ts_es_data_type_t;
 
+typedef enum
+{
+    TS_REGISTRATION_OTHER = 0,
+    TS_REGISTRATION_HDMV
+} ts_registration_type_t;
+
 typedef struct
 {
     es_format_t  fmt;
@@ -337,7 +343,7 @@ static int Control( demux_t *p_demux, int i_query, va_list args );
 
 static void PIDInit ( ts_pid_t *pid, bool b_psi, ts_psi_t *p_owner );
 static void PIDClean( demux_t *, ts_pid_t *pid );
-static void PIDFillFormat( ts_es_t *es, int i_stream_type );
+static void PIDFillFormat( const ts_es_t *es, int i_stream_type );
 
 static void PATCallBack( void*, dvbpsi_pat_t * );
 static void PMTCallBack( void *data, dvbpsi_pmt_t *p_pmt );
@@ -1017,7 +1023,11 @@ static int Control( demux_t *p_demux, int i_query, va_list args )
             if( !DVBEventInformation( p_demux, &i_time, &i_length ) && i_length > 0 )
                 *pf = (double)i_time/(double)i_length;
             else if( (i64 = stream_Size( p_demux->s) ) > 0 )
-                *pf = (double)stream_Tell( p_demux->s ) / (double)i64;
+            {
+                int64_t offset = stream_Tell( p_demux->s );
+
+                *pf = (double)offset / (double)i64;
+            }
             else
                 *pf = 0.0;
         }
@@ -2373,7 +2383,7 @@ static bool GatherData( demux_t *p_demux, ts_pid_t *pid, block_t *p_bk )
     return i_ret;
 }
 
-static void PIDFillFormat( ts_es_t *es, int i_stream_type )
+static void PIDFillFormat( const ts_es_t *es, int i_stream_type )
 {
     es_format_t *fmt = &es->fmt;
 
@@ -2412,10 +2422,6 @@ static void PIDFillFormat( ts_es_t *es, int i_stream_type )
         break;
     case 0x82:  /* SCTE-27 (sub) */
         es_format_Init( fmt, SPU_ES, VLC_CODEC_SCTE_27 );
-        es->data_type = TS_ES_DATA_TABLE_SECTION;
-        break;
-    case 0x83:  /* LPCM (audio) */
-        es_format_Init( fmt, AUDIO_ES, VLC_CODEC_DVD_LPCM );
         break;
     case 0x84:  /* SDDS (audio) */
         es_format_Init( fmt, AUDIO_ES, VLC_CODEC_SDDS );
@@ -3779,6 +3785,21 @@ static void PMTSetupEs0xA0( demux_t *p_demux, ts_pid_t *pid,
     p_fmt->b_packetized = true;
 }
 
+static void PMTSetupEs0x83( const dvbpsi_pmt_t *p_pmt, ts_pid_t *pid )
+{
+    /* WiDi broadcasts without registration on PMT 0x1, PCR 0x1000 and
+     * with audio track pid being 0x1100..0x11FF */
+    if ( p_pmt->i_program_number == 0x1 &&
+         p_pmt->i_pcr_pid == 0x1000 &&
+        ( pid->i_pid >> 8 ) == 0x11 )
+    {
+        /* Not enough ? might contain 0x83 private descriptor, 2 bytes 0x473F */
+        es_format_Init( &pid->es->fmt, AUDIO_ES, VLC_CODEC_WIDI_LPCM );
+    }
+    else
+        es_format_Init( &pid->es->fmt, AUDIO_ES, VLC_CODEC_DVD_LPCM );
+}
+
 static void PMTSetupEsHDMV( ts_pid_t *pid, const dvbpsi_pmt_es_t *p_es )
 {
     es_format_t *p_fmt = &pid->es->fmt;
@@ -3995,7 +4016,7 @@ static void PMTCallBack( void *data, dvbpsi_pmt_t *p_pmt )
         SetPIDFilter( p_demux, prg->i_pid_pcr, true ); /* Set demux filter */
 
     /* Parse descriptor */
-    bool b_hdmv = false;
+    ts_registration_type_t registration_type = TS_REGISTRATION_OTHER;
     dvbpsi_descriptor_t  *p_dr;
     for( p_dr = p_pmt->p_first_descriptor; p_dr != NULL; p_dr = p_dr->p_next )
         switch(p_dr->i_tag)
@@ -4019,7 +4040,7 @@ static void PMTCallBack( void *data, dvbpsi_pmt_t *p_pmt )
             {
                 msg_Dbg( p_demux, " * descriptor : registration %4.4s", p_dr->p_data );
                 if( !memcmp( p_dr->p_data, "HDMV", 4 ) || !memcmp( p_dr->p_data, "HDPR", 4 ) )
-                    b_hdmv = true; /* Blu-Ray */
+                    registration_type = TS_REGISTRATION_HDMV; /* Blu-Ray */
             }
             break;
 
@@ -4063,34 +4084,36 @@ static void PMTCallBack( void *data, dvbpsi_pmt_t *p_pmt )
         pid->i_pid          = p_es->i_pid;
         pid->b_seen         = p_sys->pid[p_es->i_pid].b_seen;
 
-        if( p_es->i_type == 0x10 || p_es->i_type == 0x11 ||
-            p_es->i_type == 0x12 || p_es->i_type == 0x0f )
+        switch( p_es->i_type )
         {
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0x0f:
             PMTSetupEsISO14496( p_demux, pid, prg, p_es );
-        }
-        else if( p_es->i_type == 0x06 )
-        {
+            break;
+        case 0x06:
             PMTSetupEs0x06( p_demux, pid, p_es );
-        }
-        else if( p_es->i_type == 0xEA )
-        {
-            PMTSetupEs0xEA( p_demux, pid, p_es );
-        }
-        else if( p_es->i_type == 0xd1 )
-        {
-            PMTSetupEs0xD1( p_demux, pid, p_es );
-        }
-        else if( p_es->i_type == 0xa0 )
-        {
+            break;
+        case 0x83:
+            /* LPCM (audio) */
+            PMTSetupEs0x83( p_pmt, pid );
+            break;
+        case 0xa0:
             PMTSetupEs0xA0( p_demux, pid, p_es );
-        }
-        else if( b_hdmv )
-        {
-            PMTSetupEsHDMV( pid, p_es );
-        }
-        else if( p_es->i_type >= 0x80 )
-        {
-            PMTSetupEsRegistration( p_demux, pid, p_es );
+            break;
+        case 0xd1:
+            PMTSetupEs0xD1( p_demux, pid, p_es );
+            break;
+        case 0xEA:
+            PMTSetupEs0xEA( p_demux, pid, p_es );
+            break;
+        default:
+            if( registration_type == TS_REGISTRATION_HDMV )
+                PMTSetupEsHDMV( pid, p_es );
+            else if( p_es->i_type >= 0x80 )
+                PMTSetupEsRegistration( p_demux, pid, p_es );
+            break;
         }
 
         if( pid->es->fmt.i_cat == AUDIO_ES ||
@@ -4099,6 +4122,16 @@ static void PMTCallBack( void *data, dvbpsi_pmt_t *p_pmt )
               pid->es->fmt.i_codec != VLC_CODEC_TELETEXT ) )
         {
             PMTParseEsIso639( p_demux, pid, p_es );
+        }
+
+        switch( pid->es->fmt.i_codec )
+        {
+        case VLC_CODEC_SCTE_27:
+            pid->es->data_type = TS_ES_DATA_TABLE_SECTION;
+            break;
+        default:
+            //pid->es->data_type = TS_ES_DATA_PES;
+            break;
         }
 
         pid->es->fmt.i_group = p_pmt->i_program_number;

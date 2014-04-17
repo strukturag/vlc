@@ -475,12 +475,15 @@ static int Demux( demux_t *p_demux )
         /* End of title */
         if( p_sys->i_cur_cell >= p_sys->p_cur_pgc->nr_of_cells )
         {
-            if( p_sys->i_title + 1 >= p_sys->i_titles )
-            {
-                return 0; /* EOF */
-            }
+            int k = p_sys->i_title;
 
-            DvdReadSetArea( p_demux, p_sys->i_title + 1, 0, -1 );
+            /* Looking for a not broken title */
+            while( k < p_sys->i_titles && DvdReadSetArea( p_demux, ++k, 0, -1 ) != VLC_SUCCESS )
+            {
+                msg_Err(p_demux, "Failed next title, trying another: %i", k );
+                if( k >= p_sys->i_titles )
+                    return 0; // EOF
+            }
         }
 
         if( p_sys->i_pack_len >= 1024 )
@@ -500,12 +503,15 @@ static int Demux( demux_t *p_demux )
 
     if( p_sys->i_cur_cell >= p_sys->p_cur_pgc->nr_of_cells )
     {
-        if( p_sys->i_title + 1 >= p_sys->i_titles )
-        {
-            return 0; /* EOF */
-        }
+        int k = p_sys->i_title;
 
-        DvdReadSetArea( p_demux, p_sys->i_title + 1, 0, -1 );
+        /* Looking for a not broken title */
+        while( k < p_sys->i_titles && DvdReadSetArea( p_demux, ++k, 0, -1 ) != VLC_SUCCESS )
+        {
+            msg_Err(p_demux, "Failed next title, trying another: %i", k );
+            if( k >= p_sys->i_titles )
+                return 0; // EOF
+        }
     }
 
     /*
@@ -726,7 +732,11 @@ static int DvdReadSetArea( demux_t *p_demux, int i_title, int i_chapter,
     {
         int i_start_cell, i_end_cell;
 
-        if( p_sys->p_title != NULL ) DVDCloseFile( p_sys->p_title );
+        if( p_sys->p_title != NULL )
+        {
+            DVDCloseFile( p_sys->p_title );
+            p_sys->p_title = NULL;
+        }
         if( p_vts != NULL ) ifoClose( p_vts );
         p_sys->i_title = i_title;
 

@@ -1017,7 +1017,11 @@ static block_t *EncodeVideo( encoder_t *p_enc, picture_t *p_pict )
      * bits_per_pixel value, without having to assume anything.
      */
     const int bytesPerPixel = p_enc->fmt_out.video.i_bits_per_pixel ?
-                         p_enc->fmt_out.video.i_bits_per_pixel / 8 : 3;
+                         p_enc->fmt_out.video.i_bits_per_pixel / 8 :
+                         p_sys->p_context->bits_per_coded_sample ?
+                         p_sys->p_context->bits_per_coded_sample / 8 :
+                         3;
+
     const int blocksize = __MAX( FF_MIN_BUFFER_SIZE,bytesPerPixel * p_sys->p_context->height * p_sys->p_context->width + 200 );
     block_t *p_block = block_Alloc( blocksize );
     if( unlikely(p_block == NULL) )
@@ -1086,6 +1090,7 @@ static block_t *EncodeVideo( encoder_t *p_enc, picture_t *p_pict )
             {
                 msg_Warn( p_enc, "almost fed libavcodec with two frames with "
                           "the same PTS (%"PRId64 ")", frame->pts );
+                block_Release( p_block );
                 return NULL;
             }
             else if ( p_sys->i_last_pts > frame->pts )
@@ -1093,6 +1098,7 @@ static block_t *EncodeVideo( encoder_t *p_enc, picture_t *p_pict )
                 msg_Warn( p_enc, "almost fed libavcodec with a frame in the "
                          "past (current: %"PRId64 ", last: %"PRId64")",
                          frame->pts, p_sys->i_last_pts );
+                block_Release( p_block );
                 return NULL;
             }
             else

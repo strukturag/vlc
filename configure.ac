@@ -1694,7 +1694,7 @@ AS_IF([test "$SYS" = "linux" -a "${enable_linsys}" != "no"], [
 dnl
 dnl dvdread module: check for libdvdread
 dnl
-PKG_ENABLE_MODULES_VLC([DVDREAD], [], [dvdread], [dvdread input module], [auto])
+PKG_ENABLE_MODULES_VLC([DVDREAD], [], [dvdread > 4.9.0], [dvdread input module], [auto])
 
 dnl
 dnl libdvdnav plugin
@@ -3955,10 +3955,10 @@ AS_IF([test "${enable_libgcrypt}" != "no"], [
       GCRYPT_CFLAGS="`libgcrypt-config --cflags`"
       GCRYPT_LIBS="`libgcrypt-config --libs`"
     ], [
-      AC_MSG_ERROR([libgcrypt not found. Install libgcrypt or use --disable-libgcrypt. Have a nice day.])
+      AC_MSG_ERROR([libgcrypt not found. Install libgcrypt or pass --disable-libgcrypt.])
     ], [`libgcrypt-config --libs`])
   ], [
-    AC_MSG_ERROR([libgcrypt version 1.1.94 or higher not found. Install libgcrypt or use --disable-libgcrypt. Have a nice day.])
+    AC_MSG_ERROR([libgcrypt version 1.1.94 or higher not found. Install libgcrypt or pass --disable-libgcrypt.])
   ], [#include <gcrypt.h>]
   )
 ])
@@ -3990,7 +3990,7 @@ AC_ARG_ENABLE(taglib,
   [AS_HELP_STRING([--disable-taglib],
     [do not use TagLib (default enabled)])])
 AS_IF([test "${enable_taglib}" != "no"], [
-  PKG_CHECK_MODULES(TAGLIB, taglib >= 1.6.1, [
+  PKG_CHECK_MODULES(TAGLIB, taglib >= 1.9, [
     VLC_ADD_PLUGIN([taglib])
   ], [
     AC_MSG_WARN([${TAGLIB_PKG_ERRORS}.])])

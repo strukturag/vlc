@@ -528,6 +528,10 @@ static void transcode_video_encoder_init( sout_stream_t *p_stream,
         }
     }
 
+    id->p_encoder->fmt_in.video.orientation =
+        id->p_encoder->fmt_out.video.orientation =
+        id->p_decoder->fmt_in.video.orientation;
+
     id->p_encoder->fmt_in.video.i_frame_rate =
         id->p_encoder->fmt_out.video.i_frame_rate;
     id->p_encoder->fmt_in.video.i_frame_rate_base =
@@ -656,9 +660,9 @@ void transcode_video_close( sout_stream_t *p_stream,
         filter_chain_Delete( id->p_uf_chain );
 }
 
-static void OutputFrame( sout_stream_sys_t *p_sys, picture_t *p_pic, sout_stream_t *p_stream, sout_stream_id_sys_t *id, block_t **out )
+static void OutputFrame( sout_stream_t *p_stream, picture_t *p_pic, sout_stream_id_sys_t *id, block_t **out )
 {
-
+    sout_stream_sys_t *p_sys = p_stream->p_sys;
     picture_t *p_pic2 = NULL;
     const mtime_t original_date = p_pic->date;
     bool b_need_duplicate=false;
@@ -931,7 +935,7 @@ int transcode_video_process( sout_stream_t *p_stream, sout_stream_id_sys_t *id,
                 if( !p_user_filtered_pic )
                     break;
 
-                OutputFrame( p_sys, p_user_filtered_pic, p_stream, id, out );
+                OutputFrame( p_stream, p_user_filtered_pic, id, out );
 
                 p_filtered_pic = NULL;
             }

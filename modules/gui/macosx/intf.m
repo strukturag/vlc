@@ -135,8 +135,6 @@ int WindowOpen(vout_window_t *p_wnd, const vout_window_cfg_t *cfg)
         return VLC_EGENERIC;
     }
 
-    [[VLCMain sharedInstance] setActiveVideoPlayback: YES];
-
     SEL sel = @selector(setupVoutForWindow:withProposedVideoViewPosition:);
     NSInvocation *inv = [NSInvocation invocationWithMethodSignature:[o_vout_controller methodSignatureForSelector:sel]];
     [inv setTarget:o_vout_controller];
@@ -493,7 +491,7 @@ static int DialogCallback(vlc_object_t *p_this, const char *type, vlc_value_t pr
     }
 
     NSValue *o_value = [NSValue valueWithPointer:value.p_address];
-    [[VLCCoreDialogProvider sharedInstance] performEventWithObject: o_value ofType: type];
+    [[[VLCMain sharedInstance] coreDialogProvider] performEventWithObject: o_value ofType: type];
 
     [o_pool release];
     return VLC_SUCCESS;
@@ -682,8 +680,7 @@ static VLCMain *_o_sharedMainInstance = nil;
             var_SetBool(p_playlist, "fullscreen", YES);
     }
 
-    /* load our Core and Shared Dialogs nibs */
-    nib_coredialogs_loaded = [NSBundle loadNibNamed:@"CoreDialogs" owner: NSApp];
+    /* load our Shared Dialogs nib */
     [NSBundle loadNibNamed:@"SharedDialogs" owner: NSApp];
 
     /* subscribe to various interactive dialogues */
@@ -777,9 +774,6 @@ static VLCMain *_o_sharedMainInstance = nil;
     [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self selector:@selector(computerWillSleep:)
            name:NSWorkspaceWillSleepNotification object:nil];
 
-    /* we will need this, so let's load it here so the interface appears to be more responsive */
-    nib_open_loaded = [NSBundle loadNibNamed:@"Open" owner: NSApp];
-
     /* update the main window */
     [o_mainwindow updateWindow];
     [o_mainwindow updateTimeSlider];
@@ -817,12 +811,6 @@ static VLCMain *_o_sharedMainInstance = nil;
         [[NSNotificationCenter defaultCenter] postNotificationName: NSApplicationWillTerminateNotification object: nil];
 
     playlist_t * p_playlist = pl_Get(p_intf);
-
-    /* always exit fullscreen on quit, otherwise we get ugly artifacts on the next launch */
-    if (b_nativeFullscreenMode && [o_mainwindow fullscreen]) {
-        [o_mainwindow toggleFullScreen: self];
-        [NSApp setPresentationOptions:(NSApplicationPresentationDefault)];
-    }
 
     /* save current video and audio profiles */
     [[VLCVideoEffects sharedInstance] saveCurrentProfile];
@@ -1585,10 +1573,7 @@ static VLCMain *_o_sharedMainInstance = nil;
 
 - (id)controls
 {
-    if (o_controls)
-        return o_controls;
-
-    return nil;
+    return o_controls;
 }
 
 - (id)bookmarks
@@ -1604,9 +1589,6 @@ static VLCMain *_o_sharedMainInstance = nil;
 
 - (id)open
 {
-    if (!o_open)
-        return nil;
-
     if (!nib_open_loaded)
         nib_open_loaded = [NSBundle loadNibNamed:@"Open" owner: NSApp];
 
@@ -1637,10 +1619,7 @@ static VLCMain *_o_sharedMainInstance = nil;
 
 - (id)playlist
 {
-    if (o_playlist)
-        return o_playlist;
-
-    return nil;
+    return o_playlist;
 }
 
 - (id)info
@@ -1648,10 +1627,7 @@ static VLCMain *_o_sharedMainInstance = nil;
     if (! nib_info_loaded)
         nib_info_loaded = [NSBundle loadNibNamed:@"MediaInfo" owner: NSApp];
 
-    if (o_info)
-        return o_info;
-
-    return nil;
+    return o_info;
 }
 
 - (id)wizard
@@ -1663,23 +1639,22 @@ static VLCMain *_o_sharedMainInstance = nil;
         nib_wizard_loaded = [NSBundle loadNibNamed:@"Wizard" owner: NSApp];
         [o_wizard initStrings];
     }
+
     return o_wizard;
 }
 
 - (id)coreDialogProvider
 {
-    if (o_coredialogs)
-        return o_coredialogs;
+    if (!nib_coredialogs_loaded) {
+        nib_coredialogs_loaded = [NSBundle loadNibNamed:@"CoreDialogs" owner: NSApp];
+    }
 
-    return nil;
+    return o_coredialogs;
 }
 
 - (id)eyeTVController
 {
-    if (o_eyetv)
-        return o_eyetv;
-
-    return nil;
+    return o_eyetv;
 }
 
 - (id)appleRemoteController

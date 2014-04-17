@@ -70,6 +70,8 @@ static const staticentry_t p_list_video[] = {
     B(VLC_CODEC_MP1V, "MPEG-1 Video"),
         A("mp1v"),
         A("mpg1"),
+        A("BW10"),
+        E("XMPG", "Xing MPEG-1 Intra"),
 
     B(VLC_CODEC_MPGV, "MPEG-1/2 Video"),
     B(VLC_CODEC_MP2V, "MPEG-2 Video"),
@@ -168,6 +170,7 @@ static const staticentry_t p_list_video[] = {
         A("EPHV"),
         A("DM4V"),
         A("SM4V"),
+        A("DYM4"),
         /* XVID flavours */
         E("xvid", "Xvid MPEG-4 Video"),
         E("XVID", "Xvid MPEG-4 Video"),
@@ -269,6 +272,7 @@ static const staticentry_t p_list_video[] = {
         A("h265"),
         A("H265"),
         A("x265"),
+        A("hev1"),
 
     /* h264 */
     B(VLC_CODEC_H264, "H264 - MPEG-4 AVC (part 10)"),
@@ -298,6 +302,10 @@ static const staticentry_t p_list_video[] = {
         E("DAVC", "Dicas MPEGable H.264/MPEG-4 AVC"),
         E("davc", "Dicas MPEGable H.264/MPEG-4 AVC"),
         E("x3eV", "DreX H.264"),
+        E("GAVC", "GeoVision MPEG-4 AVC"),
+        E("Q264", "QNAP H.264/MPEG-4 AVC"),
+        A("UMSV"),
+        A("SMV2"),
 
     /* H263 and H263i */
     /* H263(+) is also known as Real Video 1.0 */
@@ -346,6 +354,7 @@ static const staticentry_t p_list_video[] = {
 
     B(VLC_CODEC_FLIC, "Flic Video"),
         A("FLIC"),
+        A("AFLC"),
 
     /* MJPEG */
     B(VLC_CODEC_MJPG, "Motion JPEG Video"),
@@ -418,6 +427,8 @@ static const staticentry_t p_list_video[] = {
         A("PDVC"),
         A("IPDV"),
         A("ipdv"),
+        A("pdvc"),
+        A("SL25"),
         E("dvcp", "DV Video PAL"),
         E("dvc ", "DV Video NTSC" ),
         E("dvp ", "DV Video Pro"),
@@ -447,6 +458,7 @@ static const staticentry_t p_list_video[] = {
     B(VLC_CODEC_WMV2, "Windows Media Video 8"),
         A("WMV2"),
         A("wmv2"),
+        A("GXVE"),
 
     B(VLC_CODEC_WMV3, "Windows Media Video 9"),
         A("WMV3"),
@@ -527,6 +539,10 @@ static const staticentry_t p_list_video[] = {
 
     B(VLC_CODEC_VP6A, "On2's VP6 A Video"),
         A("VP6A"),
+
+    B(VLC_CODEC_VP7, "Google/On2's VP7 Video"),
+        A("VP70"),
+        A("VP71"),
 
     B(VLC_CODEC_VP8, "Google/On2's VP8 Video"),
         A("VP80"),
@@ -647,9 +663,11 @@ static const staticentry_t p_list_video[] = {
 
     B(VLC_CODEC_WNV1, "Winnov WNV1 Video"),
         A("WNV1"),
+        A("YUV8"),
 
     B(VLC_CODEC_AASC, "Autodesc RLE Video"),
         A("AASC"),
+        E("AAS4", "Autodesc RLE Video 24bit"),
 
     B(VLC_CODEC_INDEO2, "Indeo Video v2"),
         A("IV20"),
@@ -2068,9 +2086,9 @@ static const struct
     { { VLC_CODEC_VDPAU_VIDEO_420, VLC_CODEC_VDPAU_VIDEO_422,
         VLC_CODEC_VDPAU_VIDEO_444,
         VLC_CODEC_VDPAU_OUTPUT,
-        VLC_CODEC_ANDROID_OPAQUE, 0 },            FAKE_FMT() },
+        VLC_CODEC_ANDROID_OPAQUE, 0 },         FAKE_FMT() },
 
-    { {0}, { 0, { 0 }, 0, 0 } }
+    { { 0 },                                   FAKE_FMT() }
 };
 
 #undef PACKED_FMT

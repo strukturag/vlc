@@ -62,11 +62,14 @@ endif
 # Compiler shared DLLs, when using compilers built with --enable-shared
 # The shared DLLs may not necessarily be in the first LIBRARY_PATH, we
 # should check them all.
-	library_path_list=`$(CXX) -v /dev/null 2>&1 | grep ^LIBRARY_PATH|cut -d= -f2` ;\
+	-library_path_list=`$(CXX) -v /dev/null 2>&1 | grep ^LIBRARY_PATH|cut -d= -f2` ;\
 	IFS=':' ;\
 	for x in $$library_path_list ;\
 	do \
-		cp "$$x/libstdc++-6.dll" "$$x/libgcc_s_sjlj-1.dll" "$(win32_destdir)/" ; true ;\
+		test -f "$$x/libstdc++-6.dll" && cp "$$x/libstdc++-6.dll" "$(win32_destdir)/" ; \
+		test -f "$$x/libgcc_s_sjlj-1.dll" && cp "$$x/libgcc_s_sjlj-1.dll" "$(win32_destdir)/" ; \
+		test -f "$$x/libwinpthread-1.dll" && cp "$$x/libwinpthread-1.dll" "$(win32_destdir)/" ; \
+		test -f "$$x/../bin/libwinpthread-1.dll" && cp "$$x/../bin/libwinpthread-1.dll" "$(win32_destdir)/" ; \
 	done
 
 # SDK
@@ -143,7 +146,7 @@ else
 endif
 
 
-package-win32-exe: package-win-strip $(win32_destdir)/NSIS/UAC.dll $(win32_destdir)/NSIS/nsProcess.dll
+package-win32-exe: package-win-strip $(win32_destdir)/NSIS/UAC.dll $(win32_destdir)/NSIS/nsProcess.dll extras/package/win32/NSIS/vlc.win32.nsi
 # Script installer
 	cp    $(top_builddir)/extras/package/win32/NSIS/vlc.win32.nsi "$(win32_destdir)/"
 	cp    $(top_builddir)/extras/package/win32/NSIS/spad.nsi      "$(win32_destdir)/"

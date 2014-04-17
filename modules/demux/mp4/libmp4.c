@@ -47,7 +47,7 @@ static double conv_fx( int32_t fx ) {
 
 /* some functions for mp4 encoding of variables */
 #ifdef MP4_VERBOSE
-static void MP4_ConvertDate2Str( char *psz, uint64_t i_date )
+static void MP4_ConvertDate2Str( char *psz, uint64_t i_date, bool b_relative )
 {
     int i_day;
     int i_hour;
@@ -55,7 +55,8 @@ static void MP4_ConvertDate2Str( char *psz, uint64_t i_date )
     int i_sec;
 
     /* date begin at 1 jan 1904 */
-    i_date += ((INT64_C(1904) * 365) + 17) * 24 * 60 * 60;
+    if ( !b_relative )
+        i_date += ((INT64_C(1904) * 365) + 17) * 24 * 60 * 60;
 
     i_day = i_date / ( 60*60*24);
     i_hour = ( i_date /( 60*60 ) ) % 60;
@@ -126,8 +127,8 @@ int MP4_ReadBoxCommon( stream_t *p_stream, MP4_Box_t *p_box )
     if( p_box->i_size )
     {
         if MP4_BOX_TYPE_ASCII()
-            msg_Dbg( p_stream, "found Box: %4.4s size %"PRId64,
-                    (char*)&p_box->i_type, p_box->i_size );
+            msg_Dbg( p_stream, "found Box: %4.4s size %"PRId64" %"PRId64,
+                    (char*)&p_box->i_type, p_box->i_size, p_box->i_pos );
         else
             msg_Dbg( p_stream, "found Box: c%3.3s size %"PRId64,
                     (char*)&p_box->i_type+1, p_box->i_size );
@@ -374,13 +375,13 @@ static int MP4_ReadBox_mvhd(  stream_t *p_stream, MP4_Box_t *p_box )
 
 
 #ifdef MP4_VERBOSE
-    MP4_ConvertDate2Str( s_creation_time, p_box->data.p_mvhd->i_creation_time );
+    MP4_ConvertDate2Str( s_creation_time, p_box->data.p_mvhd->i_creation_time, false );
     MP4_ConvertDate2Str( s_modification_time,
-                         p_box->data.p_mvhd->i_modification_time );
+                         p_box->data.p_mvhd->i_modification_time, false );
     if( p_box->data.p_mvhd->i_rate )
     {
         MP4_ConvertDate2Str( s_duration,
-                 p_box->data.p_mvhd->i_duration / p_box->data.p_mvhd->i_rate );
+                 p_box->data.p_mvhd->i_duration / p_box->data.p_mvhd->i_rate, true );
     }
     else
     {
@@ -803,7 +804,7 @@ static int MP4_ReadBox_tkhd(  stream_t *p_stream, MP4_Box_t *p_box )
     double scale[2];    // scale factor; sx = scale[0] , sy = scale[1]
     double translate[2];// amount to translate; tx = translate[0] , ty = translate[1]
 
-    int *matrix = p_box->data.p_tkhd->i_matrix;
+    int32_t *matrix = p_box->data.p_tkhd->i_matrix;
 
     translate[0] = conv_fx(matrix[6]);
     translate[1] = conv_fx(matrix[7]);
@@ -821,9 +822,9 @@ static int MP4_ReadBox_tkhd(  stream_t *p_stream, MP4_Box_t *p_box )
     p_box->data.p_tkhd->f_rotation = rotation;
 
 #ifdef MP4_VERBOSE
-    MP4_ConvertDate2Str( s_creation_time, p_box->data.p_mvhd->i_creation_time );
-    MP4_ConvertDate2Str( s_modification_time, p_box->data.p_mvhd->i_modification_time );
-    MP4_ConvertDate2Str( s_duration, p_box->data.p_mvhd->i_duration );
+    MP4_ConvertDate2Str( s_creation_time, p_box->data.p_mvhd->i_creation_time, false );
+    MP4_ConvertDate2Str( s_modification_time, p_box->data.p_mvhd->i_modification_time, false );
+    MP4_ConvertDate2Str( s_duration, p_box->data.p_mvhd->i_duration, true );
 
     msg_Dbg( p_stream, "read box: \"tkhd\" creation %s modification %s duration %s track ID %d layer %d volume %f rotation %f scaleX %f scaleY %f translateX %f translateY %f width %f height %f. "
             "Matrix: %i %i %i %i %i %i %i %i %i",
@@ -838,8 +839,8 @@ static int MP4_ReadBox_tkhd(  stream_t *p_stream, MP4_Box_t *p_box )
                   scale[1],
                   translate[0],
                   translate[1],
-                  (float)p_box->data.p_tkhd->i_width / 65536,
-                  (float)p_box->data.p_tkhd->i_height / 65536,
+                  (float)p_box->data.p_tkhd->i_width / BLOCK16x16,
+                  (float)p_box->data.p_tkhd->i_height / BLOCK16x16,
                   p_box->data.p_tkhd->i_matrix[0],
                   p_box->data.p_tkhd->i_matrix[1],
                   p_box->data.p_tkhd->i_matrix[2],
@@ -890,9 +891,9 @@ static int MP4_ReadBox_mdhd( stream_t *p_stream, MP4_Box_t *p_box )
     MP4_GET2BYTES( p_box->data.p_mdhd->i_predefined );
 
 #ifdef MP4_VERBOSE
-    MP4_ConvertDate2Str( s_creation_time, p_box->data.p_mdhd->i_creation_time );
-    MP4_ConvertDate2Str( s_modification_time, p_box->data.p_mdhd->i_modification_time );
-    MP4_ConvertDate2Str( s_duration, p_box->data.p_mdhd->i_duration );
+    MP4_ConvertDate2Str( s_creation_time, p_box->data.p_mdhd->i_creation_time, false );
+    MP4_ConvertDate2Str( s_modification_time, p_box->data.p_mdhd->i_modification_time, false );
+    MP4_ConvertDate2Str( s_duration, p_box->data.p_mdhd->i_duration, true );
     msg_Dbg( p_stream, "read box: \"mdhd\" creation %s modification %s time scale %d duration %s language %c%c%c",
                   s_creation_time,
                   s_modification_time,
@@ -1093,8 +1094,8 @@ static int MP4_ReadBox_dref( stream_t *p_stream, MP4_Box_t *p_box )
 
 static void MP4_FreeBox_stts( MP4_Box_t *p_box )
 {
-    FREENULL( p_box->data.p_stts->i_sample_count );
-    FREENULL( p_box->data.p_stts->i_sample_delta );
+    FREENULL( p_box->data.p_stts->pi_sample_count );
+    FREENULL( p_box->data.p_stts->pi_sample_delta );
 }
 
 static int MP4_ReadBox_stts( stream_t *p_stream, MP4_Box_t *p_box )
@@ -1104,21 +1105,25 @@ static int MP4_ReadBox_stts( stream_t *p_stream, MP4_Box_t *p_box )
     MP4_GETVERSIONFLAGS( p_box->data.p_stts );
     MP4_GET4BYTES( p_box->data.p_stts->i_entry_count );
 
-    p_box->data.p_stts->i_sample_count =
+    p_box->data.p_stts->pi_sample_count =
         calloc( p_box->data.p_stts->i_entry_count, sizeof(uint32_t) );
-    p_box->data.p_stts->i_sample_delta =
+    p_box->data.p_stts->pi_sample_delta =
         calloc( p_box->data.p_stts->i_entry_count, sizeof(int32_t) );
-    if( p_box->data.p_stts->i_sample_count == NULL
-     || p_box->data.p_stts->i_sample_delta == NULL )
+    if( p_box->data.p_stts->pi_sample_count == NULL
+     || p_box->data.p_stts->pi_sample_delta == NULL )
     {
         MP4_READBOX_EXIT( 0 );
     }
 
-    for( unsigned int i = 0; (i < p_box->data.p_stts->i_entry_count )&&( i_read >=8 ); i++ )
+    uint32_t i = 0;
+    for( ; (i < p_box->data.p_stts->i_entry_count )&&( i_read >=8 ); i++ )
     {
-        MP4_GET4BYTES( p_box->data.p_stts->i_sample_count[i] );
-        MP4_GET4BYTES( p_box->data.p_stts->i_sample_delta[i] );
+        MP4_GET4BYTES( p_box->data.p_stts->pi_sample_count[i] );
+        MP4_GET4BYTES( p_box->data.p_stts->pi_sample_delta[i] );
     }
+
+    if ( i < p_box->data.p_stts->i_entry_count )
+        p_box->data.p_stts->i_entry_count = i;
 
 #ifdef MP4_VERBOSE
     msg_Dbg( p_stream, "read box: \"stts\" entry-count %d",
@@ -1131,8 +1136,8 @@ static int MP4_ReadBox_stts( stream_t *p_stream, MP4_Box_t *p_box )
 
 static void MP4_FreeBox_ctts( MP4_Box_t *p_box )
 {
-    FREENULL( p_box->data.p_ctts->i_sample_count );
-    FREENULL( p_box->data.p_ctts->i_sample_offset );
+    FREENULL( p_box->data.p_ctts->pi_sample_count );
+    FREENULL( p_box->data.p_ctts->pi_sample_offset );
 }
 
 static int MP4_ReadBox_ctts( stream_t *p_stream, MP4_Box_t *p_box )
@@ -1143,21 +1148,24 @@ static int MP4_ReadBox_ctts( stream_t *p_stream, MP4_Box_t *p_box )
 
     MP4_GET4BYTES( p_box->data.p_ctts->i_entry_count );
 
-    p_box->data.p_ctts->i_sample_count =
+    p_box->data.p_ctts->pi_sample_count =
         calloc( p_box->data.p_ctts->i_entry_count, sizeof(uint32_t) );
-    p_box->data.p_ctts->i_sample_offset =
+    p_box->data.p_ctts->pi_sample_offset =
         calloc( p_box->data.p_ctts->i_entry_count, sizeof(int32_t) );
-    if( ( p_box->data.p_ctts->i_sample_count == NULL )
-     || ( p_box->data.p_ctts->i_sample_offset == NULL ) )
+    if( ( p_box->data.p_ctts->pi_sample_count == NULL )
+     || ( p_box->data.p_ctts->pi_sample_offset == NULL ) )
     {
         MP4_READBOX_EXIT( 0 );
     }
 
-    for( unsigned int i = 0; (i < p_box->data.p_ctts->i_entry_count )&&( i_read >=8 ); i++ )
+    uint32_t i = 0;
+    for( ; (i < p_box->data.p_ctts->i_entry_count )&&( i_read >=8 ); i++ )
     {
-        MP4_GET4BYTES( p_box->data.p_ctts->i_sample_count[i] );
-        MP4_GET4BYTES( p_box->data.p_ctts->i_sample_offset[i] );
+        MP4_GET4BYTES( p_box->data.p_ctts->pi_sample_count[i] );
+        MP4_GET4BYTES( p_box->data.p_ctts->pi_sample_offset[i] );
     }
+    if ( i < p_box->data.p_ctts->i_entry_count )
+        p_box->data.p_ctts->i_entry_count = i;
 
 #ifdef MP4_VERBOSE
     msg_Dbg( p_stream, "read box: \"ctts\" entry-count %d",
@@ -1665,8 +1673,8 @@ static int MP4_ReadBox_sample_soun( stream_t *p_stream, MP4_Box_t *p_box )
         memcpy( &f_sample_rate, &dummy, 8 );
 
         msg_Dbg( p_stream, "read box: %f Hz", f_sample_rate );
-        p_box->data.p_sample_soun->i_sampleratehi = (int)f_sample_rate % 65536;
-        p_box->data.p_sample_soun->i_sampleratelo = f_sample_rate / 65536;
+        p_box->data.p_sample_soun->i_sampleratehi = (int)f_sample_rate % BLOCK16x16;
+        p_box->data.p_sample_soun->i_sampleratelo = f_sample_rate / BLOCK16x16;
 
         MP4_GET4BYTES( i_channel );
         p_box->data.p_sample_soun->i_channelcount = i_channel;
@@ -1712,7 +1720,7 @@ static int MP4_ReadBox_sample_soun( stream_t *p_stream, MP4_Box_t *p_box )
              p_box->data.p_sample_soun->i_channelcount,
              p_box->data.p_sample_soun->i_samplesize,
              (float)p_box->data.p_sample_soun->i_sampleratehi +
-             (float)p_box->data.p_sample_soun->i_sampleratelo / 65536 );
+             (float)p_box->data.p_sample_soun->i_sampleratelo / BLOCK16x16 );
 
 #endif
     MP4_READBOX_EXIT( 1 );
@@ -2847,13 +2855,33 @@ static int MP4_ReadBox_meta( stream_t *p_stream, MP4_Box_t *p_box )
     if( i_actually_read < 8 )
         return 0;
 
-    /* meta content starts with a 4 byte version/flags value (should be 0) */
-    i_actually_read = stream_Read( p_stream, meta_data, 4 );
-    if( i_actually_read < 4 )
+    if ( !p_box->p_father )
         return 0;
 
-    /* then it behaves like a container */
-    return MP4_ReadBoxContainerRaw( p_stream, p_box );
+    switch( p_box->p_father->i_type )
+    {
+    case ATOM_udta: /* itunes udta/meta */
+        /* meta content starts with a 4 byte version/flags value (should be 0) */
+        i_actually_read = stream_Read( p_stream, meta_data, 4 );
+        if( i_actually_read < 4 )
+            return 0;
+
+        /* then it behaves like a container */
+        return MP4_ReadBoxContainerRaw( p_stream, p_box );
+
+    default: /* regular meta atom */
+
+        i_actually_read = stream_Read( p_stream, meta_data, 8 );
+        if( i_actually_read < 8 )
+            return 0;
+
+        /* Mandatory */
+        if ( VLC_FOURCC( meta_data[4], meta_data[5], meta_data[6], meta_data[7] ) != ATOM_hdlr )
+            return 0;
+
+        //ft
+    }
+    return 1;
 }
 
 static int MP4_ReadBox_iods( stream_t *p_stream, MP4_Box_t *p_box )
