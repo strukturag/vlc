@@ -2621,7 +2621,7 @@ static int TrackTimeToSampleChunk( demux_t *p_demux, mp4_track_t *p_track,
                 i_sample < p_stss->i_sample_number[i_index+1] )
             {
                 unsigned i_sync_sample = p_stss->i_sample_number[i_index];
-                msg_Dbg( p_demux, "stts gives %d --> %d (sample number)",
+                msg_Dbg( p_demux, "stss gives %d --> %d (sample number)",
                          i_sample, i_sync_sample );
 
                 if( i_sync_sample <= i_sample )
@@ -3078,9 +3078,8 @@ static uint32_t MP4_TrackSampleSize( mp4_track_t *p_track, uint32_t *pi_nb_sampl
         uint32_t i_samples = p_track->chunk[p_track->i_chunk].i_sample_count;
         if( p_track->fmt.audio.i_blockalign > 1 )
             i_samples = p_soun->i_sample_per_packet;
-
         i_size = i_samples / p_soun->i_sample_per_packet;
-        if ( UINT32_MAX / i_size < p_soun->i_bytes_per_frame )
+        if ( UINT32_MAX / i_size >= p_soun->i_bytes_per_frame )
             i_size *= p_soun->i_bytes_per_frame;
         else
             i_size = UINT32_MAX;
@@ -3521,7 +3520,7 @@ static int MP4_frg_TrackCreate( demux_t *p_demux, mp4_track_t *p_track, MP4_Box_
 /**
  * Return the track identified by tid
  */
-static mp4_track_t *MP4_frg_GetTrack( demux_t *p_demux, const uint32_t tid )
+static mp4_track_t *MP4_frg_GetTrackByID( demux_t *p_demux, const uint32_t tid )
 {
     demux_sys_t *p_sys = p_demux->p_sys;
 
@@ -3529,8 +3528,6 @@ static mp4_track_t *MP4_frg_GetTrack( demux_t *p_demux, const uint32_t tid )
     for( unsigned i = 0; i < p_sys->i_tracks; i++ )
     {
         ret = &p_sys->track[i];
-        if( !ret )
-            return NULL;
         if( ret->i_track_ID == tid )
             return ret;
     }
@@ -3664,7 +3661,7 @@ static int MP4_frg_GetChunk( demux_t *p_demux, MP4_Box_t *p_chunk, unsigned *i_t
     assert( i_track_ID > 0 );
     msg_Dbg( p_demux, "GetChunk: track ID is %"PRIu32"", i_track_ID );
 
-    mp4_track_t *p_track = MP4_frg_GetTrack( p_demux, i_track_ID );
+    mp4_track_t *p_track = MP4_frg_GetTrackByID( p_demux, i_track_ID );
     if( !p_track )
         return VLC_EGENERIC;
 
@@ -3727,7 +3724,7 @@ static int MP4_frg_GetChunk( demux_t *p_demux, MP4_Box_t *p_chunk, unsigned *i_t
             while( p_trex && p_trex->data.p_trex->i_track_ID != i_track_ID )
                 p_trex = p_trex->p_next;
             if ( p_trex )
-                default_duration = p_trex->data.p_trex->i_default_sample_duration * p_track->i_timescale;
+                default_duration = p_trex->data.p_trex->i_default_sample_duration;
         }
         else if( p_sidx )
         {
@@ -3880,7 +3877,7 @@ static int MP4_frg_GetChunks( demux_t *p_demux, const unsigned i_tk_id )
                 tid = p_stra->data.p_stra->i_track_ID;
             }
 
-            p_track = MP4_frg_GetTrack( p_demux, tid );
+            p_track = MP4_frg_GetTrackByID( p_demux, tid );
             if( !p_track )
                 goto MP4_frg_GetChunks_Error;
             p_track->b_codec_need_restart = true;

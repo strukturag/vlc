@@ -362,10 +362,10 @@ static VLCAudioEffects *_o_sharedInstance = nil;
     }
 
     /* update UI */
-    if ([tempString rangeOfString:@"equalizer"].location == NSNotFound)
-        [o_eq_enable_ckb setState:NSOffState];
-    else
-        [o_eq_enable_ckb setState:NSOnState];
+    BOOL b_eq_enabled = [tempString rangeOfString:@"equalizer"].location != NSNotFound;
+    [o_eq_view enableSubviews:b_eq_enabled];
+    [o_eq_enable_ckb setState:(b_eq_enabled ? NSOnState : NSOffState)];
+
     [o_eq_twopass_ckb setState:[[items objectAtIndex:15] intValue]];
     [self resetCompressor];
     [self resetSpatializer];
@@ -508,6 +508,7 @@ static bool GetEqualizerStatus(intf_thread_t *p_custom_intf,
     [self updatePresetSelector];
 
     /* Set the the checkboxes */
+    [o_eq_view enableSubviews: b_enabled];
     [o_eq_enable_ckb setState: b_enabled];
     [o_eq_twopass_ckb setState: b_2p];
 }
@@ -563,6 +564,7 @@ static bool GetEqualizerStatus(intf_thread_t *p_custom_intf,
 
 - (IBAction)eq_enable:(id)sender
 {
+    [o_eq_view enableSubviews:[sender state]];
     [self setAudioFilter: "equalizer" on:[sender state]];
 }
 
@@ -800,14 +802,17 @@ static bool GetEqualizerStatus(intf_thread_t *p_custom_intf,
 #pragma mark Compressor
 - (void)resetCompressor
 {
+    BOOL b_enable_comp = NO;
     char *psz_afilters;
     psz_afilters = config_GetPsz(p_intf, "audio-filter");
     if (psz_afilters) {
+        b_enable_comp = strstr(psz_afilters, "compressor") != NULL;
         [o_comp_enable_ckb setState: (NSInteger)strstr(psz_afilters, "compressor") ];
         free(psz_afilters);
     }
-    else
-        [o_comp_enable_ckb setState: NSOffState];
+
+    [o_comp_view enableSubviews:b_enable_comp];
+    [o_comp_enable_ckb setState:(b_enable_comp ? NSOnState : NSOffState)];
 
     [o_comp_band1_sld setFloatValue: config_GetFloat(p_intf, "compressor-rms-peak")];
     [o_comp_band1_fld setStringValue:[NSString localizedStringWithFormat:@"%1.1f", [o_comp_band1_sld floatValue]]];
@@ -851,6 +856,7 @@ static bool GetEqualizerStatus(intf_thread_t *p_custom_intf,
 
 - (IBAction)comp_enable:(id)sender
 {
+    [o_comp_view enableSubviews:[sender state]];
     [self setAudioFilter:"compressor" on:[sender state]];
 }
 
@@ -899,14 +905,17 @@ static bool GetEqualizerStatus(intf_thread_t *p_custom_intf,
 #pragma mark Spatializer
 - (void)resetSpatializer
 {
+    BOOL b_enable_spat = NO;
     char *psz_afilters;
     psz_afilters = config_GetPsz(p_intf, "audio-filter");
     if (psz_afilters) {
-        [o_spat_enable_ckb setState: (NSInteger)strstr(psz_afilters, "spatializer") ];
+        b_enable_spat = strstr(psz_afilters, "spatializer") != NULL;
         free(psz_afilters);
     }
-    else
-        [o_spat_enable_ckb setState: NSOffState];
+
+    [o_spat_view enableSubviews:b_enable_spat];
+    [o_spat_enable_ckb setState:(b_enable_spat ? NSOnState : NSOffState)];
+
 
 #define setSlider(bandsld, bandfld, var) \
 [bandsld setFloatValue: config_GetFloat(p_intf, var) * 10.]; \
@@ -943,6 +952,7 @@ static bool GetEqualizerStatus(intf_thread_t *p_custom_intf,
 
 - (IBAction)spat_enable:(id)sender
 {
+    [o_spat_view enableSubviews:[sender state]];
     [self setAudioFilter:"spatializer" on:[sender state]];
 }
 
@@ -983,18 +993,23 @@ static bool GetEqualizerStatus(intf_thread_t *p_custom_intf,
 #pragma mark Filter
 - (void)resetAudioFilters
 {
+    BOOL b_enable_normvol = NO;
     char *psz_afilters;
     psz_afilters = config_GetPsz(p_intf, "audio-filter");
     if (psz_afilters) {
         [o_filter_headPhone_ckb setState: (NSInteger)strstr(psz_afilters, "headphone") ];
-        [o_filter_normLevel_ckb setState: (NSInteger)strstr(psz_afilters, "normvol") ];
         [o_filter_karaoke_ckb setState: (NSInteger)strstr(psz_afilters, "karaoke") ];
+        b_enable_normvol = strstr(psz_afilters, "normvol") != NULL;
         free(psz_afilters);
     } else {
         [o_filter_headPhone_ckb setState: NSOffState];
-        [o_filter_normLevel_ckb setState: NSOffState];
         [o_filter_karaoke_ckb setState: NSOffState];
     }
+
+    [o_filter_normLevel_sld setEnabled:b_enable_normvol];
+    [o_filter_normLevel_lbl setEnabled:b_enable_normvol];
+    [o_filter_normLevel_ckb setState:(b_enable_normvol ? NSOnState : NSOffState)];
+
     [o_filter_normLevel_sld setFloatValue: config_GetFloat(p_intf, "norm-max-level")];
 }
 
@@ -1005,6 +1020,8 @@ static bool GetEqualizerStatus(intf_thread_t *p_custom_intf,
 
 - (IBAction)filter_enableVolumeNorm:(id)sender
 {
+    [o_filter_normLevel_sld setEnabled:[sender state]];
+    [o_filter_normLevel_lbl setEnabled:[sender state]];
     [self setAudioFilter: "normvol" on:[sender state]];
 }
 

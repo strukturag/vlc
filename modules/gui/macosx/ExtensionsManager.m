@@ -64,16 +64,6 @@ static ExtensionsManager* instance = nil;
     return self;
 }
 
-/** Get the extensions_manager_t if it is loaded and hold the object */
-- (extensions_manager_t *)getManager
-{
-    if (!p_extensions_manager)
-        return NULL;
-
-    vlc_object_hold(p_extensions_manager);
-    return p_extensions_manager;
-}
-
 - (void)buildMenu:(NSMenu *)extMenu
 {
     assert(extMenu != nil);
@@ -273,7 +263,7 @@ static ExtensionsManager* instance = nil;
 {
     //This is unlikely, but can happen if no extension modules can be loaded.
     if (p_extensions_manager == NULL)
-        return ;
+        return;
     vlc_mutex_lock(&p_extensions_manager->lock);
 
     extension_t *p_ext;
@@ -290,7 +280,7 @@ static ExtensionsManager* instance = nil;
 {
     //This is unlikely, but can happen if no extension modules can be loaded.
     if (p_extensions_manager == NULL)
-        return ;
+        return;
     vlc_mutex_lock(&p_extensions_manager->lock);
 
     extension_t *p_ext;
@@ -307,7 +297,7 @@ static ExtensionsManager* instance = nil;
 {
     //This is unlikely, but can happen if no extension modules can be loaded.
     if (p_extensions_manager == NULL)
-        return ;
+        return;
     vlc_mutex_lock(&p_extensions_manager->lock);
     extension_t *p_ext;
     FOREACH_ARRAY(p_ext, p_extensions_manager->extensions) {

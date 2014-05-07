@@ -240,10 +240,6 @@ static int OpenWithCookies( vlc_object_t *p_this, const char *psz_access,
     access_sys_t *p_sys;
     char         *psz, *p;
 
-    /* Only forward an store cookies if the corresponding option is activated */
-    bool   b_forward_cookies = var_InheritBool( p_access, "http-forward-cookies" );
-    vlc_array_t * saved_cookies = b_forward_cookies ? (cookies ? cookies : vlc_array_new()) : NULL;
-
     /* Set up p_access */
     STANDARD_READ_ACCESS_INIT;
 #ifdef HAVE_ZLIB_H
@@ -286,7 +282,11 @@ static int OpenWithCookies( vlc_object_t *p_this, const char *psz_access,
     p_access->info.i_pos  = 0;
     p_access->info.b_eof  = false;
 
-    p_sys->cookies = saved_cookies;
+    /* Only forward an store cookies if the corresponding option is activated */
+    if( var_CreateGetBool( p_access, "http-forward-cookies" ) )
+        p_sys->cookies = (cookies != NULL) ? cookies : vlc_array_new();
+    else
+        p_sys->cookies = NULL;
 
     http_auth_Init( &p_sys->auth );
     http_auth_Init( &p_sys->proxy_auth );
@@ -871,9 +871,16 @@ static int ReadICYMeta( access_t *p_access )
             p_sys->psz_icy_title = EnsureUTF8( psz_tmp );
             if( !p_sys->psz_icy_title )
                 free( psz_tmp );
-            //p_access->info.i_update |= INPUT_UPDATE_META; FIXME
 
-            msg_Dbg( p_access, "New Title=%s", p_sys->psz_icy_title );
+            msg_Dbg( p_access, "New Icy-Title=%s", p_sys->psz_icy_title );
+            input_thread_t *p_input = access_GetParentInput( p_access );
+            if( p_input )
+            {
+                input_item_t *p_input_item = input_GetItem( p_access->p_input );
+                if( p_input_item )
+                    input_item_SetMeta( p_input_item, vlc_meta_NowPlaying, p_sys->psz_icy_title );
+                vlc_object_release( p_input );
+            }
         }
     }
     free( psz_meta );
@@ -994,17 +1001,6 @@ static int Control( access_t *p_access, int i_query, va_list args )
 
         /* */
         case ACCESS_SET_PAUSE_STATE:
-            break;
-
-        case ACCESS_GET_META:
-            p_meta = (vlc_meta_t*)va_arg( args, vlc_meta_t* );
-
-            if( p_sys->psz_icy_name )
-                vlc_meta_Set( p_meta, vlc_meta_Title, p_sys->psz_icy_name );
-            if( p_sys->psz_icy_genre )
-                vlc_meta_Set( p_meta, vlc_meta_Genre, p_sys->psz_icy_genre );
-            if( p_sys->psz_icy_title )
-                vlc_meta_Set( p_meta, vlc_meta_NowPlaying, p_sys->psz_icy_title );
             break;
 
         case ACCESS_GET_CONTENT_TYPE:
@@ -1216,11 +1212,11 @@ static int Request( access_t *p_access, uint64_t i_tell )
     }
 
     /* Authentication */
-    if( p_sys->url.psz_username || p_sys->url.psz_password )
+    if( p_sys->url.psz_username && p_sys->url.psz_password )
         AuthReply( p_access, "", &p_sys->url, &p_sys->auth );
 
     /* Proxy Authentication */
-    if( p_sys->proxy.psz_username || p_sys->proxy.psz_password )
+    if( p_sys->proxy.psz_username && p_sys->proxy.psz_password )
         AuthReply( p_access, "Proxy-", &p_sys->proxy, &p_sys->proxy_auth );
 
     /* ICY meta data request */
@@ -1464,6 +1460,14 @@ static int Request( access_t *p_access, uint64_t i_tell )
             if( !p_sys->psz_icy_name )
                 free( psz_tmp );
             msg_Dbg( p_access, "Icy-Name: %s", p_sys->psz_icy_name );
+            input_thread_t *p_input = access_GetParentInput( p_access );
+            if ( p_input )
+            {
+                input_item_t *p_input_item = input_GetItem( p_access->p_input );
+                if ( p_input_item )
+                    input_item_SetMeta( p_input_item, vlc_meta_Title, p_sys->psz_icy_name );
+                vlc_object_release( p_input );
+            }
 
             p_sys->b_icecast = true; /* be on the safeside. set it here as well. */
             p_sys->b_reconnect = true;
@@ -1477,6 +1481,14 @@ static int Request( access_t *p_access, uint64_t i_tell )
             if( !p_sys->psz_icy_genre )
                 free( psz_tmp );
             msg_Dbg( p_access, "Icy-Genre: %s", p_sys->psz_icy_genre );
+            input_thread_t *p_input = access_GetParentInput( p_access );
+            if( p_input )
+            {
+                input_item_t *p_input_item = input_GetItem( p_access->p_input );
+                if( p_input_item )
+                    input_item_SetMeta( p_input_item, vlc_meta_Genre, p_sys->psz_icy_genre );
+                vlc_object_release( p_input );
+            }
         }
         else if( !strncasecmp( psz, "Icy-Notice", 10 ) )
         {

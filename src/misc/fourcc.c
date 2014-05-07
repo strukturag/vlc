@@ -374,6 +374,7 @@ static const staticentry_t p_list_video[] = {
         A("FMJP"),
         A("SJPG"),
         A("QIVG"),
+        A("qIVG"),
         E("AVRn", "Avid Motion JPEG"),
         E("AVDJ", "Avid Motion JPEG"),
         E("ADJV", "Avid Motion JPEG"),
@@ -1445,6 +1446,8 @@ static const staticentry_t p_list_audio[] = {
 
     B(VLC_CODEC_INDEO_AUDIO, "Indeo Audio Coder"),
         A("ms\x04\x02"),
+
+    B(VLC_CODEC_TAK, "TAK (Tom's lossless Audio Kompressor)"),
 
     B(0, "")
 };

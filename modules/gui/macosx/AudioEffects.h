@@ -33,6 +33,7 @@
     BOOL b_genericAudioProfileInInteraction;
 
     /* Equalizer */
+    IBOutlet id o_eq_view;
     IBOutlet id o_eq_enable_ckb;
     IBOutlet id o_eq_twopass_ckb;
     IBOutlet id o_eq_preamp_lbl;
@@ -50,6 +51,7 @@
     IBOutlet id o_eq_preamp_sld;
 
     /* Compressor */
+    IBOutlet id o_comp_view;
     IBOutlet id o_comp_enable_ckb;
     IBOutlet id o_comp_reset_btn;
     IBOutlet id o_comp_band1_sld;
@@ -75,6 +77,7 @@
     IBOutlet id o_comp_band7_lbl;
 
     /* Spatializer */
+    IBOutlet id o_spat_view;
     IBOutlet id o_spat_enable_ckb;
     IBOutlet id o_spat_reset_btn;
     IBOutlet id o_spat_band1_sld;

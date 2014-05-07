@@ -91,7 +91,7 @@ processcommands = function ()
         --]]
         vlc.playlist.add({{path=vlc.strings.make_uri(input),options=options,name=name,duration=duration}})
     elseif command == "addsubtitle" then
-        vlc.input.add_subtitle (vlc.strings.make_uri(val))
+        vlc.input.add_subtitle (val)
     elseif command == "in_enqueue" then
         vlc.playlist.enqueue({{path=vlc.strings.make_uri(input),options=options,name=name,duration=duration}})
     elseif command == "pl_play" then
@@ -149,7 +149,9 @@ processcommands = function ()
             vlc.sd.add(val)
         end
     elseif command == "fullscreen" then
-        vlc.video.fullscreen()
+        if vlc.object.vout() then
+            vlc.video.fullscreen()
+        end
     elseif command == "snapshot" then
         common.snapshot()
     elseif command == "volume" then

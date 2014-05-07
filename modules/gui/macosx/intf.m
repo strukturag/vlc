@@ -273,7 +273,6 @@ static void QuitVLC( void *obj )
  * Run: main loop
  *****************************************************************************/
 static NSLock * o_appLock = nil;    // controls access to f_appExit
-static NSLock * o_plItemChangedLock = nil;
 
 static void Run(intf_thread_t *p_intf)
 {
@@ -281,7 +280,6 @@ static void Run(intf_thread_t *p_intf)
     [VLCApplication sharedApplication];
 
     o_appLock = [[NSLock alloc] init];
-    o_plItemChangedLock = [[NSLock alloc] init];
     o_vout_provider_lock = [[NSLock alloc] init];
 
     libvlc_SetExitHandler(p_intf->p_libvlc, QuitVLC, p_intf);
@@ -292,7 +290,6 @@ static void Run(intf_thread_t *p_intf)
 
     [NSApp run];
     [[VLCMain sharedInstance] applicationWillTerminate:nil];
-    [o_plItemChangedLock release];
     [o_appLock release];
     [o_vout_provider_lock release];
     o_vout_provider_lock = nil;
@@ -388,13 +385,7 @@ static int PLItemChanged(vlc_object_t *p_this, const char *psz_var,
 {
     NSAutoreleasePool * o_pool = [[NSAutoreleasePool alloc] init];
 
-    /* Due to constraints within NSAttributedString's main loop runtime handling
-     * and other issues, we need to wait for -PlaylistItemChanged to finish and
-     * then -informInputChanged on this non-main thread. */
-    [o_plItemChangedLock lock];
-    [[VLCMain sharedInstance] performSelectorOnMainThread:@selector(PlaylistItemChanged) withObject:nil waitUntilDone:YES]; // MUST BE ON MAIN THREAD
-    [[VLCMain sharedInstance] informInputChanged]; // DO NOT MOVE TO MAIN THREAD
-    [o_plItemChangedLock unlock];
+    [[VLCMain sharedInstance] performSelectorOnMainThread:@selector(PlaylistItemChanged) withObject:nil waitUntilDone:NO];
 
     [o_pool release];
     return VLC_SUCCESS;
@@ -614,7 +605,7 @@ static VLCMain *_o_sharedMainInstance = nil;
         _o_sharedMainInstance = [super init];
 
     p_intf = NULL;
-    p_current_input = p_input_changed = NULL;
+    p_current_input = NULL;
 
     o_open = [[VLCOpen alloc] init];
     o_coredialogs = [[VLCCoreDialogProvider alloc] init];
@@ -634,6 +625,8 @@ static VLCMain *_o_sharedMainInstance = nil;
     [defaults registerDefaults:appDefaults];
 
     o_vout_controller = [[VLCVoutWindowController alloc] init];
+
+    informInputChangedQueue = dispatch_queue_create("org.videolan.vlc.inputChangedQueue", DISPATCH_QUEUE_SERIAL);
 
     return _o_sharedMainInstance;
 }
@@ -1265,9 +1258,11 @@ static VLCMain *_o_sharedMainInstance = nil;
 // This must be called on main thread
 - (void)PlaylistItemChanged
 {
+    input_thread_t *p_input_changed = NULL;
+
     if (p_current_input && (p_current_input->b_dead || !vlc_object_alive(p_current_input))) {
         var_DelCallback(p_current_input, "intf-event", InputEvent, [VLCMain sharedInstance]);
-        p_input_changed = p_current_input;
+        vlc_object_release(p_current_input);
         p_current_input = NULL;
 
         [o_mainmenu setRateControlsEnabled: NO];
@@ -1292,15 +1287,17 @@ static VLCMain *_o_sharedMainInstance = nil;
     [o_mainwindow updateWindow];
     [self updateDelays];
     [self updateMainMenu];
-}
 
-- (void)informInputChanged
-{
-    if (p_input_changed) {
+    /*
+     * Due to constraints within NSAttributedString's main loop runtime handling
+     * and other issues, we need to inform the extension manager on a separate thread.
+     * The serial queue ensures that changed inputs are propagated in the same order as they arrive.
+     */
+    dispatch_async(informInputChangedQueue, ^{
         [[ExtensionsManager getInstance:p_intf] inputChanged:p_input_changed];
-        vlc_object_release(p_input_changed);
-        p_input_changed = NULL;
-    }
+        if (p_input_changed)
+            vlc_object_release(p_input_changed);
+    });
 }
 
 - (void)updateMainMenu
@@ -1495,6 +1492,44 @@ static VLCMain *_o_sharedMainInstance = nil;
         if (systemSleepAssertionID > 0) {
             msg_Dbg(VLCIntf, "releasing sleep blocker (%i)" , systemSleepAssertionID);
             IOPMAssertionRelease(systemSleepAssertionID);
+        }
+
+        /* continue playback where you left off */
+        if (p_current_input) {
+            input_item_t *p_item = input_GetItem(p_current_input);
+            if (p_item) {
+                NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+                NSMutableDictionary *mutDict = [[NSMutableDictionary alloc] initWithDictionary:[defaults objectForKey:@"recentlyPlayedMedia"]];
+
+                char *psz_url = decode_URI(input_item_GetURI(p_item));
+                NSString *url = [NSString stringWithUTF8String:psz_url ? psz_url : ""];
+                free(psz_url);
+                vlc_value_t pos;
+                var_Get(p_current_input, "position", &pos);
+                float f_current_pos = 100. * pos.f_float;
+                long long int dur = input_item_GetDuration(p_item) / 1000000;
+                int current_pos_in_sec = (f_current_pos * dur) / 100;
+                NSMutableArray *mediaList = [defaults objectForKey:@"recentlyPlayedMediaList"];
+
+                if (pos.f_float > .05 && pos.f_float < .95 && dur > 180) {
+                    [mutDict setObject:[NSNumber numberWithInt:current_pos_in_sec] forKey:url];
+
+                    [mediaList removeObject:url];
+                    [mediaList addObject:url];
+                    NSUInteger mediaListCount = mediaList.count;
+                    if (mediaListCount > 30) {
+                        for (NSUInteger x = 0; x < mediaListCount - 30; x++) {
+                            [mutDict removeObjectForKey:[mediaList objectAtIndex:0]];
+                            [mediaList removeObjectAtIndex:0];
+                        }
+                    }
+                } else {
+                    [mutDict removeObjectForKey:url];
+                    [mediaList removeObject:url];
+                }
+                [defaults setObject:mutDict forKey:@"recentlyPlayedMedia"];
+                [defaults setObject:mediaList forKey:@"recentlyPlayedMediaList"];
+            }
         }
 
         if (state == END_S || state == -1) {

@@ -30,7 +30,6 @@
 #include "components/playlist/standardpanel.hpp"  /* MainView */
 #include "components/playlist/selector.hpp"       /* PLSelector */
 #include "components/playlist/playlist_model.hpp" /* PLModel */
-#include "components/playlist/ml_model.hpp"       /* MLModel */
 #include "components/interface_widgets.hpp"       /* CoverArtLabel */
 
 #include "util/searchlineedit.hpp"
@@ -94,16 +93,7 @@ PlaylistWidget::PlaylistWidget( intf_thread_t *_p_i, QWidget *_par )
 
     setMinimumWidth( 400 );
 
-    VLCProxyModel *model = new VLCProxyModel( this );
-
-    PLModel *plmodel = PLModel::getPLModel( p_intf );
-    model->setModel( VLCProxyModel::PL_MODEL, plmodel );
-    model->switchToModel( VLCProxyModel::PL_MODEL );
-
-#ifdef SQL_MEDIA_LIBRARY
-    MLModel *mlmodel = new MLModel( p_intf, model );
-    model->setModel( VLCProxyModel::SQLML_MODEL, mlmodel );
-#endif
+    PLModel *model = PLModel::getPLModel( p_intf );
 
     mainView = new StandardPLPanel( this, p_intf, p_root, selector, model );
 
@@ -239,7 +229,7 @@ void PlaylistWidget::changeView( const QModelIndex& index )
 #include <QSignalMapper>
 #include <QMenu>
 #include <QPainter>
-LocationBar::LocationBar( VLCProxyModel *m )
+LocationBar::LocationBar( VLCModel *m )
 {
     setModel( m );
     mapper = new QSignalMapper( this );

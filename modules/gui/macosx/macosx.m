@@ -1,7 +1,7 @@
 /*****************************************************************************
  * macosx.m: Mac OS X module for vlc
  *****************************************************************************
- * Copyright (C) 2001-2013 VLC authors and VideoLAN
+ * Copyright (C) 2001-2014 VLC authors and VideoLAN
  * $Id$
  *
  * Authors: Felix Paul Kühne <fkuehne at videolan dot org>
@@ -123,10 +123,21 @@ void WindowClose  (vout_window_t *);
 #define ITUNES_TEXT N_("Control external music players")
 #define ITUNES_LONGTEXT N_("VLC will pause and resume supported music players on playback.")
 
+#define LARGE_LISTFONT_TEXT N_("Use large text for list views")
+
 static const int itunes_list[] =
     { 0, 1, 2 };
 static const char *const itunes_list_text[] = {
     N_("Do nothing"), N_("Pause iTunes / Spotify"), N_("Pause and resume iTunes / Spotify")
+};
+
+#define CONTINUE_PLAYBACK_TEXT N_("Continue playback where you left off")
+#define CONTINUE_PLAYBACK_LONGTEXT N_("VLC will store playback positions of the last 30 items you played. If you re-open one of those, playback will continue.")
+
+static const int continue_playback_list[] =
+{ 0, 1, 2 };
+static const char *const continue_playback_list_text[] = {
+    N_("Ask"), N_("Always"), N_("Never")
 };
 
 #define VOLUME_MAX_TEXT N_("Maximum Volume displayed")
@@ -151,6 +162,7 @@ vlc_module_begin()
         add_bool("macosx-show-effects-button", false, EFFECTSBUTTON_TEXT, EFFECTSBUTTON_LONGTEXT, false)
         add_bool("macosx-show-sidebar", true, SIDEBAR_TEXT, SIDEBAR_LONGTEXT, false)
         add_integer_with_range("macosx-max-volume", 125, 60, 200, VOLUME_MAX_TEXT, VOLUME_MAX_TEXT, true)
+        add_bool("macosx-large-text", false, LARGE_LISTFONT_TEXT, LARGE_LISTFONT_TEXT, false)
 
     set_section(N_("Behavior"), 0)
         add_bool("macosx-autoplay", true, AUTOPLAY_OSX_TEST, AUTOPLAY_OSX_LONGTEXT, false)
@@ -161,6 +173,8 @@ vlc_module_begin()
         add_bool("macosx-lock-aspect-ratio", true, LOCK_ASPECT_RATIO_TEXT, LOCK_ASPECT_RATIO_TEXT, true)
         add_integer("macosx-control-itunes", 1, ITUNES_TEXT, ITUNES_LONGTEXT, false)
         change_integer_list(itunes_list, itunes_list_text)
+        add_integer("macosx-continue-playback", 0, CONTINUE_PLAYBACK_TEXT, CONTINUE_PLAYBACK_LONGTEXT, false)
+        change_integer_list(continue_playback_list, continue_playback_list_text)
 
     set_section(N_("Apple Remote and media keys"), 0)
         add_bool("macosx-appleremote", true, USE_APPLE_REMOTE_TEXT, USE_APPLE_REMOTE_LONGTEXT, false)

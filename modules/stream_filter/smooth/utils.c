@@ -97,9 +97,8 @@ chunk_t *chunk_New( sms_stream_t* sms, uint64_t duration,\
 
 void chunk_Free( chunk_t *chunk )
 {
-    if( chunk->data )
-        FREENULL( chunk->data );
-    FREENULL( chunk );
+    free( chunk->data );
+    free( chunk );
 }
 
 sms_stream_t * sms_New( void )
@@ -109,12 +108,19 @@ sms_stream_t * sms_New( void )
 
     sms->qlevels = vlc_array_new();
     sms->chunks = vlc_array_new();
+    if ( unlikely(!sms->qlevels || !sms->chunks) )
+    {
+        sms_Free( sms );
+        return NULL;
+    }
     sms->type = UNKNOWN_ES;
     return sms;
 }
 
 void sms_Free( sms_stream_t *sms )
 {
+    if ( !sms )
+        return;
     if( sms->qlevels )
     {
         for( int n = 0; n < vlc_array_count( sms->qlevels ); n++ )
@@ -138,7 +144,6 @@ void sms_Free( sms_stream_t *sms )
     free( sms->name );
     free( sms->url_template );
     free( sms );
-    sms = NULL;
 }
 
 quality_level_t *get_qlevel( sms_stream_t *sms, const unsigned qid )
@@ -169,10 +174,10 @@ void sms_queue_free( sms_queue_t* queue )
     while( item )
     {
         next = item->next;
-        FREENULL( item );
+        free( item );
         item = next;
     }
-    FREENULL( queue );
+    free( queue );
 }
 
 int sms_queue_put( sms_queue_t *queue, const uint64_t value )

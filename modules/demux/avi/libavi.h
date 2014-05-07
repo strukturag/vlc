@@ -122,7 +122,7 @@ typedef struct avi_chunk_strf_auds_s
     WAVEFORMATEX    *p_wf;
 } avi_chunk_strf_auds_t;
 
-typedef struct avi_chunk_strf_vids_s
+typedef struct ATTR_PACKED avi_chunk_strf_vids_s
 {
     AVI_CHUNK_COMMON
     int                     i_cat;
@@ -259,6 +259,7 @@ void   *_AVI_ChunkFind ( avi_chunk_t *, vlc_fourcc_t, int );
 
 int     AVI_ChunkReadRoot( stream_t *, avi_chunk_t *p_root );
 void    AVI_ChunkFreeRoot( stream_t *, avi_chunk_t *p_chk  );
+int     AVI_ChunkFetchIndexes( stream_t *, avi_chunk_t *p_riff );
 
 #define AVI_ChunkCount( p_chk, i_fourcc ) \
     _AVI_ChunkCount( AVI_CHUNK(p_chk), i_fourcc )

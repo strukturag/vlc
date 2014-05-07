@@ -300,13 +300,9 @@ static size_t httpd_HtmlError (char **body, int code, const char *url)
 struct httpd_file_t
 {
     httpd_url_t *url;
-
-    char *psz_url;
-    char *psz_mime;
-
     httpd_file_callback_t pf_fill;
     httpd_file_sys_t      *p_sys;
-
+    char mime[1];
 };
 
 static int
@@ -326,7 +322,7 @@ httpd_FileCallBack(httpd_callback_sys_t *p_sys, httpd_client_t *cl,
 
     answer->i_status = 200;
 
-    httpd_MsgAdd(answer, "Content-type",  "%s", file->psz_mime);
+    httpd_MsgAdd(answer, "Content-type",  "%s", file->mime);
     httpd_MsgAdd(answer, "Cache-Control", "%s", "no-cache");
 
     if (query->i_type != HTTPD_MSG_HEAD) {
@@ -366,8 +362,13 @@ httpd_file_t *httpd_FileNew(httpd_host_t *host,
                              httpd_file_callback_t pf_fill,
                              httpd_file_sys_t *p_sys)
 {
-    httpd_file_t *file = malloc(sizeof(*file));
-    if (!file)
+    const char *mime = psz_mime;
+    if (mime == NULL || mime[0] == '\0')
+        mime = vlc_mime_Ext2Mime(psz_url);
+
+    size_t mimelen = strlen(mime);
+    httpd_file_t *file = malloc(sizeof(*file) + mimelen);
+    if (unlikely(file == NULL))
         return NULL;
 
     file->url = httpd_UrlNew(host, psz_url, psz_user, psz_password);
@@ -376,14 +377,9 @@ httpd_file_t *httpd_FileNew(httpd_host_t *host,
         return NULL;
     }
 
-    file->psz_url  = strdup(psz_url);
-    if (psz_mime && *psz_mime)
-        file->psz_mime = strdup(psz_mime);
-    else
-        file->psz_mime = strdup(vlc_mime_Ext2Mime(psz_url));
-
     file->pf_fill = pf_fill;
     file->p_sys   = p_sys;
+    memcpy(file->mime, mime, mimelen + 1);
 
     httpd_UrlCatch(file->url, HTTPD_MSG_HEAD, httpd_FileCallBack,
                     (httpd_callback_sys_t*)file);
@@ -400,12 +396,7 @@ httpd_file_sys_t *httpd_FileDelete(httpd_file_t *file)
     httpd_file_sys_t *p_sys = file->p_sys;
 
     httpd_UrlDelete(file->url);
-
-    free(file->psz_url);
-    free(file->psz_mime);
-
     free(file);
-
     return p_sys;
 }
 
@@ -534,7 +525,7 @@ httpd_handler_sys_t *httpd_HandlerDelete(httpd_handler_t *handler)
 struct httpd_redirect_t
 {
     httpd_url_t *url;
-    char        *psz_dst;
+    char         dst[1];
 };
 
 static int httpd_RedirectCallBack(httpd_callback_sys_t *p_sys,
@@ -553,11 +544,11 @@ static int httpd_RedirectCallBack(httpd_callback_sys_t *p_sys,
     answer->i_type   = HTTPD_MSG_ANSWER;
     answer->i_status = 301;
 
-    answer->i_body = httpd_HtmlError (&p_body, 301, rdir->psz_dst);
+    answer->i_body = httpd_HtmlError (&p_body, 301, rdir->dst);
     answer->p_body = (unsigned char *)p_body;
 
     /* XXX check if it's ok or we need to set an absolute url */
-    httpd_MsgAdd(answer, "Location",  "%s", rdir->psz_dst);
+    httpd_MsgAdd(answer, "Location",  "%s", rdir->dst);
 
     httpd_MsgAdd(answer, "Content-Length", "%d", answer->i_body);
 
@@ -567,8 +558,10 @@ static int httpd_RedirectCallBack(httpd_callback_sys_t *p_sys,
 httpd_redirect_t *httpd_RedirectNew(httpd_host_t *host, const char *psz_url_dst,
                                      const char *psz_url_src)
 {
-    httpd_redirect_t *rdir = malloc(sizeof(*rdir));
-    if (!rdir)
+    size_t dstlen = strlen(psz_url_dst);
+
+    httpd_redirect_t *rdir = malloc(sizeof(*rdir) + dstlen);
+    if (unlikely(rdir == NULL))
         return NULL;
 
     rdir->url = httpd_UrlNew(host, psz_url_src, NULL, NULL);
@@ -576,7 +569,7 @@ httpd_redirect_t *httpd_RedirectNew(httpd_host_t *host, const char *psz_url_dst,
         free(rdir);
         return NULL;
     }
-    rdir->psz_dst = strdup(psz_url_dst);
+    memcpy(rdir->dst, psz_url_dst, dstlen + 1);
 
     /* Redirect apply for all HTTP request and RTSP DESCRIBE resquest */
     httpd_UrlCatch(rdir->url, HTTPD_MSG_HEAD, httpd_RedirectCallBack,
@@ -593,7 +586,6 @@ httpd_redirect_t *httpd_RedirectNew(httpd_host_t *host, const char *psz_url_dst,
 void httpd_RedirectDelete(httpd_redirect_t *rdir)
 {
     httpd_UrlDelete(rdir->url);
-    free(rdir->psz_dst);
     free(rdir);
 }
 
@@ -767,10 +759,9 @@ httpd_stream_t *httpd_StreamNew(httpd_host_t *host,
     }
 
     vlc_mutex_init(&stream->lock);
-    if (psz_mime && *psz_mime)
-        stream->psz_mime = strdup(psz_mime);
-    else
-        stream->psz_mime = strdup(vlc_mime_Ext2Mime(psz_url));
+    if (psz_mime == NULL || psz_mime[0] == '\0')
+        psz_mime = vlc_mime_Ext2Mime(psz_url);
+    stream->psz_mime = xstrdup(psz_mime);
 
     stream->i_header = 0;
     stream->p_header = NULL;
@@ -1108,9 +1099,9 @@ httpd_url_t *httpd_UrlNew(httpd_host_t *host, const char *psz_url,
     url->host = host;
 
     vlc_mutex_init(&url->lock);
-    url->psz_url = strdup(psz_url);
-    url->psz_user = strdup(psz_user ? psz_user : "");
-    url->psz_password = strdup(psz_password ? psz_password : "");
+    url->psz_url = xstrdup(psz_url);
+    url->psz_user = xstrdup(psz_user ? psz_user : "");
+    url->psz_password = xstrdup(psz_password ? psz_password : "");
     for (int i = 0; i < HTTPD_MSG_MAX; i++) {
         url->catch[i].cb = NULL;
         url->catch[i].p_sys = NULL;
