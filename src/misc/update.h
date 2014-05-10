@@ -40,18 +40,6 @@
 #include <vlc_update.h>
 #include <vlc_atomic.h>
 
-enum    /* Public key algorithms */
-{
-    /* we will only use DSA public keys */
-    PUBLIC_KEY_ALGO_DSA = 0x11
-};
-
-enum    /* Digest algorithms */
-{
-    /* and DSA use SHA-1 digest */
-    DIGEST_ALGO_SHA1    = 0x02
-};
-
 enum    /* Packet types */
 {
     SIGNATURE_PACKET    = 0x02,
@@ -206,8 +194,7 @@ parse_public_key(
  * Verify an OpenPGP signature made on some SHA-1 hash, with some DSA public key
  */
 int
-verify_signature(
-        uint8_t *p_r, uint8_t *p_s, public_key_packet_t *p_key,
+verify_signature(signature_packet_t *sign, public_key_packet_t *p_key,
         uint8_t *p_hash );
 
 /*
@@ -237,4 +224,3 @@ hash_sha1_from_file(
  */
 uint8_t *
 hash_sha1_from_public_key( public_key_t *p_pkey );
-
