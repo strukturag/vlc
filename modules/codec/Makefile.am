@@ -116,6 +116,13 @@ libjpeg_plugin_la_LIBADD = -ljpeg
 EXTRA_LTLIBRARIES += libjpeg_plugin.la
 codec_LTLIBRARIES += $(LTLIBjpeg)
 
+libsvgdec_plugin_la_SOURCES = codec/svg.c
+libsvgdec_plugin_la_CFLAGS = $(AM_CLAGS) $(CFLAGS_svgdec)
+libsvgdec_plugin_la_LDFLAGS = $(AM_LDFLAGS) -rpath '$(codecdir)'  $(LDFLAGS_svg)
+libsvgdec_plugin_la_LIBADD = $(LIBS_svgdec)
+EXTRA_LTLIBRARIES += libsvgdec_plugin.la
+codec_LTLIBRARIES += $(LTLIBsvgdec)
+
 libsdl_image_plugin_la_SOURCES = codec/sdl_image.c
 libsdl_image_plugin_la_CFLAGS = $(AM_CFLAGS) $(SDL_IMAGE_CFLAGS)
 libsdl_image_plugin_la_LDFLAGS = $(AM_LDFLAGS) -rpath '$(codecdir)'
@@ -477,3 +484,10 @@ libquicktime_plugin_la_LDFLAGS = $(AM_LDFLAGS) -rpath '$(codecdir)'
 libquicktime_plugin_la_LIBADD = $(LIBM)
 EXTRA_LTLIBRARIES += libquicktime_plugin.la
 codec_LTLIBRARIES += $(LTLIBquicktime)
+
+libgstdecode_plugin_la_SOURCES = codec/gstdecode.c
+libgstdecode_plugin_la_CFLAGS = $(AM_CFLAGS) $(GST_VIDEO_CFLAGS) $(GST_APP_CFLAGS)
+libgstdecode_plugin_la_LIBADD = $(GST_VIDEO_LIBS) $(GST_APP_LIBS)
+if HAVE_GST_DECODE
+codec_LTLIBRARIES += libgstdecode_plugin.la
+endif

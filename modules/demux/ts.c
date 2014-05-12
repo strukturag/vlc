@@ -343,7 +343,7 @@ static int Control( demux_t *p_demux, int i_query, va_list args );
 
 static void PIDInit ( ts_pid_t *pid, bool b_psi, ts_psi_t *p_owner );
 static void PIDClean( demux_t *, ts_pid_t *pid );
-static void PIDFillFormat( const ts_es_t *es, int i_stream_type );
+static void PIDFillFormat( es_format_t *fmt, int i_stream_type );
 
 static void PATCallBack( void*, dvbpsi_pat_t * );
 static void PMTCallBack( void *data, dvbpsi_pmt_t *p_pmt );
@@ -365,8 +365,6 @@ static inline int PIDGet( block_t *p )
 static bool GatherData( demux_t *p_demux, ts_pid_t *pid, block_t *p_bk );
 
 static block_t* ReadTSPacket( demux_t *p_demux );
-static mtime_t GetPCR( block_t *p_pkt );
-static int SeekToPCR( demux_t *p_demux, int64_t i_pos );
 static int Seek( demux_t *p_demux, double f_percent );
 static void GetFirstPCR( demux_t *p_demux );
 static void GetLastPCR( demux_t *p_demux );
@@ -790,7 +788,7 @@ static int Open( vlc_object_t *p_this )
 
     while( p_sys->i_pmt_es <= 0 && vlc_object_alive( p_demux ) )
     {
-        if( p_demux->pf_demux( p_demux ) != 1 )
+        if( Demux( p_demux ) != 1 )
             break;
     }
     return VLC_SUCCESS;
@@ -1296,7 +1294,7 @@ static int UserPmt( demux_t *p_demux, const char *psz_fmt )
             else
             {
                 const int i_stream_type = strtol( psz_opt, NULL, 0 );
-                PIDFillFormat( pid->es, i_stream_type );
+                PIDFillFormat( &pid->es->fmt, i_stream_type );
             }
             pid->es->fmt.i_group = i_number;
             if( p_sys->b_es_id_pid )
@@ -1765,7 +1763,7 @@ static void ParseTableSection( demux_t *p_demux, ts_pid_t *pid, block_t *p_data 
             if( p_content->i_buffer > 9 && p_content->p_buffer[0] == 0xc6 )
             {
                 int i_index = 0;
-                int i_offset = 4;
+                size_t i_offset = 4;
                 if( p_content->p_buffer[3] & 0x40 )
                 {
                     i_index = ((p_content->p_buffer[7] & 0x0f) << 8) |
@@ -2383,10 +2381,8 @@ static bool GatherData( demux_t *p_demux, ts_pid_t *pid, block_t *p_bk )
     return i_ret;
 }
 
-static void PIDFillFormat( const ts_es_t *es, int i_stream_type )
+static void PIDFillFormat( es_format_t *fmt, int i_stream_type )
 {
-    es_format_t *fmt = &es->fmt;
-
     switch( i_stream_type )
     {
     case 0x01:  /* MPEG-1 video */
@@ -4079,7 +4075,7 @@ static void PMTCallBack( void *data, dvbpsi_pmt_t *p_pmt )
         }
 
         PIDInit( pid, false, pmt->psi );
-        PIDFillFormat( pid->es, p_es->i_type );
+        PIDFillFormat( &pid->es->fmt, p_es->i_type );
         pid->i_owner_number = prg->i_number;
         pid->i_pid          = p_es->i_pid;
         pid->b_seen         = p_sys->pid[p_es->i_pid].b_seen;

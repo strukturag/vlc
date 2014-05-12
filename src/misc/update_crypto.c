@@ -1,5 +1,5 @@
 /*****************************************************************************
- * update_crypto.c: DSA/SHA1 related functions used for updating
+ * update_crypto.c: DSA related functions used for updating
  *****************************************************************************
  * Copyright © 2008-2009 VLC authors and VideoLAN
  * $Id$
@@ -105,7 +105,7 @@ static int parse_public_key_packet( public_key_packet_t *p_key,
     memcpy( p_key->timestamp, p_buf, 4 ); p_buf += 4; i_read += 4;
 
     p_key->algo      = *p_buf++; i_read++;
-    if( p_key->algo != PUBLIC_KEY_ALGO_DSA )
+    if( p_key->algo != GCRY_PK_DSA )
         return VLC_EGENERIC;
 
     READ_MPI(p_key->p, 1024);
@@ -158,7 +158,7 @@ static size_t parse_signature_v3_packet( signature_packet_t *p_sig,
 
 /*
  * fill a signature_packet_v4_t from signature packet data
- * verify that it was used with a DSA public key, using SHA-1 digest
+ * verify that it was used with a DSA public key
  */
 static size_t parse_signature_v4_packet( signature_packet_t *p_sig,
                                       const uint8_t *p_buf, size_t i_sig_len )
@@ -282,10 +282,7 @@ static int parse_signature_packet( signature_packet_t *p_sig,
     if( i_read == 0 ) /* signature packet parsing has failed */
         goto error;
 
-    if( p_sig->public_key_algo != PUBLIC_KEY_ALGO_DSA )
-        goto error;
-
-    if( p_sig->digest_algo != DIGEST_ALGO_SHA1 )
+    if( p_sig->public_key_algo != GCRY_PK_DSA )
         goto error;
 
     switch( p_sig->type )
@@ -415,12 +412,12 @@ static int pgp_unarmor( const char *p_ibuf, size_t i_ibuf_len,
 
 
 /*
- * Verify an OpenPGP signature made on some SHA-1 hash, with some DSA public key
+ * Verify an OpenPGP signature made with some DSA public key
  */
-int verify_signature( uint8_t *p_r, uint8_t *p_s, public_key_packet_t *p_key,
+int verify_signature( signature_packet_t *sign, public_key_packet_t *p_key,
                       uint8_t *p_hash )
 {
-    /* the data to be verified (a SHA-1 hash) */
+    /* the data to be verified (a hash) */
     const char *hash_sexp_s = "(data(flags raw)(value %m))";
     /* the public key */
     const char *key_sexp_s = "(public-key(dsa(p %m)(q %m)(g %m)(y %m)))";
@@ -444,6 +441,8 @@ int verify_signature( uint8_t *p_r, uint8_t *p_s, public_key_packet_t *p_key,
         gcry_sexp_build( &key_sexp, &erroff, key_sexp_s, p, q, g, y ) )
         goto problem;
 
+    uint8_t *p_r = sign->r;
+    uint8_t *p_s = sign->s;
     int i_r_len = mpi_len( p_r );
     int i_s_len = mpi_len( p_s );
     if( gcry_mpi_scan( &r, GCRYMPI_FMT_USG, p_r + 2, i_r_len, NULL ) ||
@@ -451,7 +450,11 @@ int verify_signature( uint8_t *p_r, uint8_t *p_s, public_key_packet_t *p_key,
         gcry_sexp_build( &sig_sexp, &erroff, sig_sexp_s, r, s ) )
         goto problem;
 
-    int i_hash_len = 20;
+    int i_hash_len = gcry_md_get_algo_dlen (sign->digest_algo);
+    if (sign->public_key_algo == GCRY_PK_DSA) {
+        if (i_hash_len > 20)
+            i_hash_len = 20;
+    }
     if( gcry_mpi_scan( &hash, GCRYMPI_FMT_USG, p_hash, i_hash_len, NULL ) ||
         gcry_sexp_build( &hash_sexp, &erroff, hash_sexp_s, hash ) )
         goto problem;
@@ -654,23 +657,24 @@ static uint8_t *hash_finish( gcry_md_hd_t hd, signature_packet_t *p_sig )
 
     gcry_md_final( hd );
 
-    uint8_t *p_tmp = (uint8_t*) gcry_md_read( hd, GCRY_MD_SHA1);
-    uint8_t *p_hash = malloc( 20 );
+    uint8_t *p_tmp = (uint8_t*) gcry_md_read( hd, p_sig->digest_algo) ;
+    unsigned int hash_len = gcry_md_get_algo_dlen (p_sig->digest_algo);
+    uint8_t *p_hash = malloc(hash_len);
     if( p_hash )
-        memcpy( p_hash, p_tmp, 20 );
+        memcpy(p_hash, p_tmp, hash_len);
     gcry_md_close( hd );
     return p_hash;
 }
 
 
 /*
- * return a sha1 hash of a text
+ * return a hash of a text
  */
-uint8_t *hash_sha1_from_text( const char *psz_string,
+uint8_t *hash_from_text( const char *psz_string,
         signature_packet_t *p_sig )
 {
     gcry_md_hd_t hd;
-    if( gcry_md_open( &hd, GCRY_MD_SHA1, 0 ) )
+    if( gcry_md_open( &hd, p_sig->digest_algo, 0 ) )
         return NULL;
 
     if( p_sig->type == TEXT_SIGNATURE )
@@ -699,12 +703,12 @@ uint8_t *hash_sha1_from_text( const char *psz_string,
 
 
 /*
- * return a sha1 hash of a file
+ * return a hash of a file
  */
-uint8_t *hash_sha1_from_file( const char *psz_file, signature_packet_t *p_sig )
+uint8_t *hash_from_file( const char *psz_file, signature_packet_t *p_sig )
 {
     gcry_md_hd_t hd;
-    if( gcry_md_open( &hd, GCRY_MD_SHA1, 0 ) )
+    if( gcry_md_open( &hd, p_sig->digest_algo, 0 ) )
         return NULL;
 
     if( hash_from_binary_file( psz_file, hd ) < 0 )
@@ -718,10 +722,10 @@ uint8_t *hash_sha1_from_file( const char *psz_file, signature_packet_t *p_sig )
 
 
 /*
- * Generate a SHA1 hash on a public key, to verify a signature made on that hash
+ * Generate a hash on a public key, to verify a signature made on that hash
  * Note that we need the signature (v4) to compute the hash
  */
-uint8_t *hash_sha1_from_public_key( public_key_t *p_pkey )
+uint8_t *hash_from_public_key( public_key_t *p_pkey )
 {
     if( p_pkey->sig.version != 4 )
         return NULL;
@@ -733,7 +737,7 @@ uint8_t *hash_sha1_from_public_key( public_key_t *p_pkey )
     gcry_error_t error = 0;
     gcry_md_hd_t hd;
 
-    error = gcry_md_open( &hd, GCRY_MD_SHA1, 0 );
+    error = gcry_md_open( &hd, p_pkey->sig.digest_algo, 0 );
     if( error )
         return NULL;
 

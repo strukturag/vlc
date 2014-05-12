@@ -382,8 +382,6 @@ static int parse_Manifest( stream_t *s )
                 }
                 break;
 
-            case XML_READER_NONE:
-                break;
             case XML_READER_TEXT:
                 break;
             default:
@@ -395,6 +393,7 @@ static int parse_Manifest( stream_t *s )
     }
 #undef TIMESCALE
 
+    sms_Free( sms );
     xml_ReaderDelete( vlc_reader );
     xml_Delete( vlc_xml );
 

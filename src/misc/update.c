@@ -307,7 +307,7 @@ static bool GetUpdateFile( update_t *p_update )
             goto error;
         }
 
-        uint8_t *p_hash = hash_sha1_from_public_key( p_new_pkey );
+        uint8_t *p_hash = hash_from_public_key( p_new_pkey );
         if( !p_hash )
         {
             msg_Err( p_update->p_libvlc, "Failed to hash signature" );
@@ -316,7 +316,7 @@ static bool GetUpdateFile( update_t *p_update )
             goto error;
         }
 
-        if( verify_signature( p_new_pkey->sig.r, p_new_pkey->sig.s,
+        if( verify_signature( &p_new_pkey->sig,
                     &p_update->p_pkey->key, p_hash ) == VLC_SUCCESS )
         {
             free( p_hash );
@@ -332,22 +332,22 @@ static bool GetUpdateFile( update_t *p_update )
         }
     }
 
-    uint8_t *p_hash = hash_sha1_from_text( psz_update_data, &sign );
+    uint8_t *p_hash = hash_from_text( psz_update_data, &sign );
     if( !p_hash )
     {
-        msg_Warn( p_update->p_libvlc, "Can't compute SHA1 hash for status file" );
+        msg_Warn( p_update->p_libvlc, "Can't compute hash for status file" );
         goto error;
     }
 
     else if( p_hash[0] != sign.hash_verification[0] ||
         p_hash[1] != sign.hash_verification[1] )
     {
-        msg_Warn( p_update->p_libvlc, "Bad SHA1 hash for status file" );
+        msg_Warn( p_update->p_libvlc, "Bad hash for status file" );
         free( p_hash );
         goto error;
     }
 
-    else if( verify_signature( sign.r, sign.s, &p_update->p_pkey->key, p_hash )
+    else if( verify_signature( &sign, &p_update->p_pkey->key, p_hash )
             != VLC_SUCCESS )
     {
         msg_Err( p_update->p_libvlc, "BAD SIGNATURE for status file" );
@@ -671,7 +671,7 @@ static void* update_DownloadReal( void *obj )
         goto end;
     }
 
-    uint8_t *p_hash = hash_sha1_from_file( psz_destfile, &sign );
+    uint8_t *p_hash = hash_from_file( psz_destfile, &sign );
     if( !p_hash )
     {
         msg_Err( p_udt, "Unable to hash %s", psz_destfile );
@@ -691,12 +691,12 @@ static void* update_DownloadReal( void *obj )
         dialog_FatalWait( p_udt, _("File corrupted"),
             _("Downloaded file \"%s\" was corrupted. Thus, it was deleted."),
              psz_destfile );
-        msg_Err( p_udt, "Bad SHA1 hash for %s", psz_destfile );
+        msg_Err( p_udt, "Bad hash for %s", psz_destfile );
         free( p_hash );
         goto end;
     }
 
-    if( verify_signature( sign.r, sign.s, &p_update->p_pkey->key, p_hash )
+    if( verify_signature( &sign, &p_update->p_pkey->key, p_hash )
             != VLC_SUCCESS )
     {
         vlc_unlink( psz_destfile );

@@ -226,6 +226,8 @@
 #define VLC_CODEC_RGBA            VLC_FOURCC('R','G','B','A')
 /* 32 bits ARGB */
 #define VLC_CODEC_ARGB            VLC_FOURCC('A','R','G','B')
+/* 32 bits BGRA */
+#define VLC_CODEC_BGRA            VLC_FOURCC('B','G','R','A')
 
 /* Planar GBR 4:4:4 8 bits */
 #define VLC_CODEC_GBR_PLANAR      VLC_FOURCC('G','B','R','8')
@@ -289,6 +291,7 @@
 #define VLC_CODEC_TIFF            VLC_FOURCC('t','i','f','f')
 #define VLC_CODEC_GIF             VLC_FOURCC('g','i','f',' ')
 #define VLC_CODEC_TARGA           VLC_FOURCC('t','g','a',' ')
+#define VLC_CODEC_SVG             VLC_FOURCC('s','v','g',' ')
 #define VLC_CODEC_SGI             VLC_FOURCC('s','g','i',' ')
 #define VLC_CODEC_PNM             VLC_FOURCC('p','n','m',' ')
 #define VLC_CODEC_PCX             VLC_FOURCC('p','c','x',' ')

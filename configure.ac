@@ -2256,6 +2256,26 @@ PKG_CHECK_EXISTS([libavutil], [
 AC_MSG_RESULT([${avfork}])
 
 dnl
+dnl gstreamer stuff
+dnl
+AC_ARG_ENABLE(gst-decode,
+  [  --enable-gst-decode     GStreamer based decoding support (currently supports only video decoding) (default auto)])
+
+have_gst_decode="no"
+AS_IF([test "${enable_gst_decode}" != "no"], [
+  PKG_CHECK_MODULES([GST_APP], [gstreamer-app-1.0], [
+    PKG_CHECK_MODULES([GST_VIDEO], [gstreamer-video-1.0], [
+      have_gst_decode="yes"
+    ], [
+      AC_MSG_WARN([${GST_VIDEO_PKG_ERRORS}. GStreamer decoder module will not be built.])
+    ])
+  ], [
+    AC_MSG_WARN([${GST_APP_PKG_ERRORS}. GStreamer modules will not be built.])
+  ])
+])
+AM_CONDITIONAL([HAVE_GST_DECODE], [test "${have_gst_decode}" = "yes"])
+
+dnl
 dnl  avcodec decoder/encoder plugin
 dnl
 AC_ARG_ENABLE(avcodec,
@@ -2401,7 +2421,13 @@ AS_IF([test "${enable_vda}" != "no"], [
       AC_MSG_ERROR([--enable-vda and --disable-avcodec options are mutually exclusive.])
     ])
  ])
-  fi
+ AS_IF([test "${have_avcodec_vda}" = "yes"], [
+     SAVE_LIBS=$LIBS
+     LIBS="$LIBS $AVCODEC_LIBS"
+     AC_CHECK_FUNCS([av_vda_alloc_context])
+     LIBS=$SAVE_LIBS
+ ])
+ fi
 ])
 AM_CONDITIONAL([HAVE_AVCODEC_VDA], [test "${have_avcodec_vda}" = "yes"])
 
@@ -3241,9 +3267,10 @@ then
 fi
 
 dnl
-dnl  SVG module
+dnl  SVG module (text rendering and image decoding)
 dnl
 PKG_ENABLE_MODULES_VLC([SVG], [], [librsvg-2.0 >= 2.9.0], [SVG rendering library],[auto])
+PKG_ENABLE_MODULES_VLC([SVGDEC], [], [librsvg-2.0 >= 2.9.0 cairo >= 1.13.1], [SVG image decoder library],[auto])
 
 dnl
 dnl  android surface module
