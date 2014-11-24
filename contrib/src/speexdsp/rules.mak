@@ -1,7 +1,7 @@
 # speexdsp
 
 SPEEXDSP_VERSION := git
-SPEEXDSP_HASH := HEAD
+SPEEXDSP_HASH := 2721dca6498436ac100cff49c52481321cb21c3d
 SPEEXDSP_GITURL := http://git.xiph.org/?p=speexdsp.git;a=snapshot;h=$(SPEEXDSP_HASH);sf=tgz
 
 PKGS += speexdsp
