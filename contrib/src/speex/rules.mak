@@ -3,7 +3,7 @@
 #SPEEX_VERSION := 1.2rc1
 #SPEEX_URL := http://downloads.us.xiph.org/releases/speex/speex-$(SPEEX_VERSION).tar.gz
 SPEEX_VERSION := git
-SPEEX_HASH := HEAD
+SPEEX_HASH := 774c87d6cb7dd8dabdd17677fc6da753ecf4aa87
 SPEEX_GITURL := http://git.xiph.org/?p=speex.git;a=snapshot;h=$(SPEEX_HASH);sf=tgz
 
 PKGS += speex
