@@ -36,7 +36,7 @@ GAS_VERSION=eca4c18
 GAS_URL=http://git.libav.org/?p=gas-preprocessor.git;a=snapshot;h=$(GAS_VERSION);sf=tgz
 
 RAGEL_VERSION=6.8
-RAGEL_URL=http://www.complang.org/ragel/ragel-$(RAGEL_VERSION).tar.gz
+RAGEL_URL=http://pkgs.fedoraproject.org/repo/pkgs/ragel/ragel-6.8.tar.gz/1bb39745ac23da449019f9f2cb4b0d01/ragel-6.8.tar.gz
 
 SED_VERSION=4.2.2
 SED_URL=$(GNU)/sed/sed-$(SED_VERSION).tar.bz2
