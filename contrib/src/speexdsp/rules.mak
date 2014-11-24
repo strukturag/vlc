@@ -1,7 +1,7 @@
 # speexdsp
 
 SPEEXDSP_VERSION := git
-SPEEXDSP_HASH := 2721dca6498436ac100cff49c52481321cb21c3d
+SPEEXDSP_HASH := HEAD
 SPEEXDSP_GITURL := http://git.xiph.org/?p=speexdsp.git;a=snapshot;h=$(SPEEXDSP_HASH);sf=tgz
 
 PKGS += speexdsp
@@ -20,8 +20,6 @@ speexdsp: speexdsp-$(SPEEXDSP_VERSION).tar.gz .sum-speexdsp
 	rm -Rf $@-git $@
 	mkdir -p $@-git
 	$(ZCAT) "$<" | (cd $@-git && tar xv --strip-components=1)
-	$(APPLY) $(SRC)/speexdsp/neon.patch
-	$(APPLY) $(SRC)/speexdsp/includedir.patch
 	$(MOVE)
 
 SPEEXDSP_CONF := --enable-resample-full-sinc-table
