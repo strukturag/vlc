@@ -16,7 +16,10 @@ $(TARBALLS)/libtheora-$(THEORA_VERSION).tar.xz:
 
 libtheora: libtheora-$(THEORA_VERSION).tar.xz .sum-theora
 	$(UNPACK)
-	$(APPLY) $(SRC)/theora/libtheora-includes.patch
+	$(APPLY) $(SRC)/theora/libtheora-compiler-differentiation.patch
+ifdef HAVE_MACOSX
+	$(APPLY) $(SRC)/theora/libtheora-no-forceaddr.patch
+endif
 	$(UPDATE_AUTOCONFIG)
 	$(MOVE)
 
@@ -46,7 +49,6 @@ endif
 DEPS_theora = ogg $(DEPS_ogg)
 
 .theora: libtheora
-	cd $< && autoreconf -ivf -I m4
 	cd $< && $(HOSTVARS) ./configure $(THEORACONF)
 	cd $< && $(MAKE) install
 	touch $@
